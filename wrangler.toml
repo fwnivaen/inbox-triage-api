@@ -1,0 +1,13 @@
+name = "inbox-triage-api"
+main = "src/index.ts"
+compatibility_date = "2024-10-22"
+
+# Workers AI binding — used to generate the one-sentence summary and
+# suggested_reply draft. Labeling/priority/privacy are deterministic rule
+# code (src/classifier.ts, src/priority.ts, src/privacy.ts) and never need AI.
+[ai]
+binding = "AI"
+
+# No KV/D1 binding yet: sir has no Cloudflare account connected, so this
+# repo ships classify + digest as pure request/response endpoints with no
+# persistence. See README.md "Deploying" for what to add once he connects one.
