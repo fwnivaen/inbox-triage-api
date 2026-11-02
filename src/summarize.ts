@@ -1,5 +1,5 @@
-import { firstNameOf, redactSensitive } from "./privacy.js";
-import type { Env, InboundEmail, Label } from "./types.js";
+import { firstNameOf, hasInformativeContent, redactSensitive } from "./privacy.js";
+import type { InboundEmail, Label } from "./types.js";
 
 const REPLY_LABELS: Label[] = ["Needs Reply", "Deadline"];
 
@@ -16,7 +16,10 @@ function firstSentence(text: string): string {
 export function heuristicSummary(email: InboundEmail, preview: string): string {
   const subject = stripThreadPrefix(email.subject);
   const body = firstSentence(redactSensitive(preview)).slice(0, 140);
-  const base = body.length > 10 ? body : subject;
+  // If the first sentence was mostly a credential/OTP/account number, redaction
+  // leaves a near-empty stub like "Your [redacted]." — that still has length,
+  // but no real information. Prefer the subject line in that case.
+  const base = hasInformativeContent(body) ? body : subject;
   return /[.!?]$/.test(base) ? base : `${base}.`;
 }
 
@@ -76,13 +79,18 @@ export async function summarizeAndReply(
 
     const raw = typeof result === "string" ? result : (result as { response?: string }).response ?? "";
     const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+    const redactedSummary =
+      typeof parsed.summary === "string" && parsed.summary.trim() ? redactSensitive(parsed.summary) : "";
+    const redactedReply =
+      typeof parsed.suggested_reply === "string" && parsed.suggested_reply.trim()
+        ? redactSensitive(parsed.suggested_reply)
+        : "";
     return {
-      summary: typeof parsed.summary === "string" && parsed.summary.trim() ? redactSensitive(parsed.summary) : fallback.summary,
-      suggested_reply: needsReply
-        ? typeof parsed.suggested_reply === "string" && parsed.suggested_reply.trim()
-          ? redactSensitive(parsed.suggested_reply)
-          : fallback.suggested_reply
-        : null,
+      // The model only ever sees the already-redacted preview, so it can echo
+      // a near-content-free stub (e.g. "Your [redacted]."); treat that the
+      // same as "no usable AI summary" and fall back to the heuristic.
+      summary: hasInformativeContent(redactedSummary) ? redactedSummary : fallback.summary,
+      suggested_reply: needsReply ? (hasInformativeContent(redactedReply) ? redactedReply : fallback.suggested_reply) : null,
     };
   } catch {
     return fallback;

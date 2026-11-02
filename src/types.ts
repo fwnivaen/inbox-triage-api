@@ -34,6 +34,5 @@ export interface ClassifiedEmail {
   has_attachment: boolean;
 }
 
-export interface Env {
-  AI: Ai;
-}
+// `Env` is declared globally by `wrangler types` in worker-configuration.d.ts
+// (regenerate with `npx wrangler types` after changing wrangler.toml bindings).

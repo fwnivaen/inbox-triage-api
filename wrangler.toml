@@ -1,6 +1,17 @@
 name = "inbox-triage-api"
 main = "src/index.ts"
-compatibility_date = "2024-10-22"
+compatibility_date = "2026-11-02"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
 
 # Workers AI binding — used to generate the one-sentence summary and
 # suggested_reply draft. Labeling/priority/privacy are deterministic rule
@@ -8,6 +19,6 @@ compatibility_date = "2024-10-22"
 [ai]
 binding = "AI"
 
-# No KV/D1 binding yet: sir has no Cloudflare account connected, so this
-# repo ships classify + digest as pure request/response endpoints with no
-# persistence. See README.md "Deploying" for what to add once he connects one.
+# No KV/D1 binding yet: classify + digest ship as pure request/response
+# endpoints with no persistence. See README.md "Deploying" for what to add
+# once a scheduled Gmail-polling job needs retained state.

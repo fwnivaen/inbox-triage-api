@@ -31,6 +31,16 @@ describe("classifyEmail (no AI binding — local dev / unauthenticated Cloudflar
     expect(serialized).not.toContain(fx.spamOtpInBody.fromAddress);
     expect(serialized).not.toContain("483920");
   });
+
+  it("falls back to the subject when the first sentence is just a redacted OTP", async () => {
+    // Regression: the first sentence of fx.spamOtpInBody's body is entirely
+    // the verification code, so a naive length check on the redacted text
+    // ("Your [redacted].") passed as "informative" and shipped a content-free
+    // digest line. It must fall back to the subject instead.
+    const result = await classifyEmail(fx.spamOtpInBody);
+    expect(result.summary).not.toBe("Your [redacted].");
+    expect(result.summary).toContain("one-time verification code");
+  });
 });
 
 describe("buildDailyDigest end-to-end", () => {

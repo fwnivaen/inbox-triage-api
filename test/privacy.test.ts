@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstNameOf, isAutomatedAddress, redactSensitive, safePreview } from "../src/privacy.js";
+import { firstNameOf, hasInformativeContent, isAutomatedAddress, redactSensitive, safePreview } from "../src/privacy.js";
 
 describe("redactSensitive", () => {
   it("redacts a verification code next to its label", () => {
@@ -47,6 +47,16 @@ describe("firstNameOf", () => {
 
   it("falls back to a generic label when no name is present", () => {
     expect(firstNameOf("")).toBe("Someone");
+  });
+});
+
+describe("hasInformativeContent", () => {
+  it("rejects a sentence that is almost entirely a redaction placeholder", () => {
+    expect(hasInformativeContent("Your [redacted].")).toBe(false);
+  });
+
+  it("accepts a sentence with real content alongside a placeholder", () => {
+    expect(hasInformativeContent("Your package arrives [redacted] before the gate closes.")).toBe(true);
   });
 });
 
