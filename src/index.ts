@@ -1,3 +1,4 @@
+import { isAuthorized } from "./auth.js";
 import { buildDigest } from "./digest.js";
 import { GMAIL_ACCOUNTS, isGmailAccountKey } from "./gmail/accounts.js";
 import { buildConsentUrl, completeOAuthCallback } from "./gmail/oauth.js";
@@ -34,6 +35,9 @@ async function handle(request: Request, env: Env, url: URL): Promise<Response> {
   }
 
   if (url.pathname === "/classify" && request.method === "POST") {
+    if (!isAuthorized(request, env)) {
+      return json({ error: "Unauthorized" }, 401);
+    }
     const body = await request.json().catch(() => null);
     if (isInboundEmail(body)) {
       return json(await classifyEmail(body, env));
@@ -45,11 +49,15 @@ async function handle(request: Request, env: Env, url: URL): Promise<Response> {
   }
 
   if (url.pathname === "/digest" && request.method === "POST") {
+    if (!isAuthorized(request, env)) {
+      return json({ error: "Unauthorized" }, 401);
+    }
     const body = await request.json().catch(() => null);
     if (!Array.isArray(body) || !body.every(isInboundEmail)) {
       return json({ error: "Expected an InboundEmail[] body." }, 400);
     }
     const classified = await classifyBatch(body, env);
+    console.log(JSON.stringify({ message: "digest built", count: classified.length }));
     return json({ digest: buildDigest(classified), emails: classified });
   }
 
