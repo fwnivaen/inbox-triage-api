@@ -3,6 +3,7 @@
 // declared here and merged into the global `Env` interface it generates in
 // worker-configuration.d.ts.
 interface Env {
+  GMAIL_ACCOUNT_EMAILS?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   DIGEST_API_KEY?: string;

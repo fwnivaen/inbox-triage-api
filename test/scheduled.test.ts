@@ -16,5 +16,6 @@ describe("runDailySync", () => {
     expect(digest).toBe("");
     const stored = await getLatestDigest(env);
     expect(stored?.text).toBe("");
+    expect(stored?.accounts).toEqual({ work: { status: "not_connected", count: 0 }, personal: { status: "not_connected", count: 0 }, school: { status: "not_connected", count: 0 } });
   });
 });

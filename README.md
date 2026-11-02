@@ -104,13 +104,18 @@ formatted daily digest text (SPEC.md §4); `emails` is every classified item
 ### `GET /health`
 Returns `{ ok: true }`. No token required.
 
+### `POST /sync` *(requires bearer token)*
+
+Runs the same Gmail sync as cron immediately and returns the stored digest and
+per-account results. Inspect every account status before treating a run as complete.
+
 ### Gmail OAuth mode (optional)
 
 The Worker can also pull mail itself via Gmail's read-only API, instead of
 being fed by an agent. This is fully built but optional — leave the Google
 OAuth secrets unset to run in agent-fed mode only.
 
-### `GET /oauth/start?account=work|personal|school`
+### `GET /oauth/start?account=work|personal|school` *(requires bearer token)*
 Redirects to Google's consent screen for that Gmail account, requesting only
 `https://www.googleapis.com/auth/gmail.readonly`.
 
@@ -119,9 +124,11 @@ Google redirects here after consent. Exchanges the code for tokens, refuses
 and discards anything granting more than read-only Gmail, and stores the
 refresh token for that account (Workers KV, never the repo).
 
-### `GET /digest/latest`
-Returns the most recent daily digest — from either mode, whichever last
-saved one — plus which Gmail accounts are currently connected:
+### `GET /digest/latest` *(requires bearer token)*
+Returns the most recent scheduled or manual Gmail sync digest, including per-account
+`accounts` status (`ok`, `failed`, or `not_connected`) and processed counts,
+plus which Gmail accounts have stored tokens. A stored token does not prove
+that an account synced successfully. Agent-fed `/digest` results are not persisted:
 `{ generatedAt, text, connectedAccounts }`.
 
 ```ts
@@ -230,3 +237,28 @@ until `DIGEST_API_KEY` is set — there's no "open" fallback mode.
   — the full message body is never requested or stored (SPEC.md §5).
 - Classification metadata and the latest digest auto-expire from KV after
   90 days via `expirationTtl`; no manual cleanup job is needed.
+
+## Direct Gmail integration readiness (November 2, 2026)
+
+The deployed Worker requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
+`GMAIL_ACCOUNT_EMAILS` in addition to `DIGEST_API_KEY`. Set the identity mapping
+as a secret JSON object with keys `work`, `personal`, and `school` and their
+expected email addresses. The callback checks Gmail's authenticated profile
+before storing a refresh token; selecting a different inbox fails closed.
+Never commit this mapping or credentials.
+
+Enable Gmail API in the Google Cloud project, register the callback URI above,
+and configure consent/test-user access for all three accounts (school policy
+may require an NYU administrator). Each account must complete read-only consent.
+Use an authenticated request to `/oauth/start?account=...` to get its redirect;
+never place the API key in a URL. Only then run authenticated `POST /sync` and
+verify three `ok` account results plus a real redacted digest. Cron is currently
+13:00 UTC daily (8 AM Eastern standard time / 9 AM Eastern daylight time), and
+stores results for authenticated retrieval; it does not deliver email or chat.
+The separate 7:30 AM Eastern assistant automation handles chat delivery.
+
+OAuth state lives in eventually consistent Workers KV; it is not an atomic
+replay lock. Avoid concurrent callback retries. Large inboxes may exceed Worker
+execution or AI quotas; account failures are reported explicitly and can be
+retried via `/sync`. Message-level checkpoints and automatic delivery are not
+implemented in this Worker.

@@ -7,6 +7,7 @@ function envWithCreds(): Env {
   return {
     INBOX_KV: fakeKv(),
     WORKER_BASE_URL: "https://inbox-triage-api.inbox-triage-api.workers.dev",
+    GMAIL_ACCOUNT_EMAILS: JSON.stringify({ personal: "personal@example.com" }),
     GOOGLE_CLIENT_ID: "test-client-id",
     GOOGLE_CLIENT_SECRET: "test-client-secret",
   } as unknown as Env;
@@ -44,6 +45,7 @@ describe("completeOAuthCallback", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         jsonResponse({
+          emailAddress: "personal@example.com",
           access_token: "a",
           refresh_token: "personal-refresh",
           expires_in: 3600,
@@ -53,6 +55,8 @@ describe("completeOAuthCallback", () => {
       ),
     );
 
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ access_token: "a", refresh_token: "personal-refresh" }))
+      .mockResolvedValueOnce(jsonResponse({ emailAddress: "personal@example.com" }));
     const result = await completeOAuthCallback(env, "auth-code", state);
 
     expect(result.account).toBe("personal");
@@ -66,6 +70,7 @@ describe("completeOAuthCallback", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         jsonResponse({
+          emailAddress: "personal@example.com",
           access_token: "a",
           refresh_token: "should-not-be-saved",
           expires_in: 3600,
@@ -91,6 +96,7 @@ describe("completeOAuthCallback", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         jsonResponse({
+          emailAddress: "personal@example.com",
           access_token: "a",
           expires_in: 3600,
           scope: "https://www.googleapis.com/auth/gmail.readonly",
@@ -130,4 +136,14 @@ describe("refreshAccessToken", () => {
 
     await expect(refreshAccessToken(env, "some-refresh-token")).rejects.toThrow(/unexpected scope/i);
   });
+});
+
+it("rejects the wrong inbox identity without saving a refresh token", async () => {
+  const env = envWithCreds();
+  const state = await createOAuthState(env, "personal");
+  vi.stubGlobal("fetch", vi.fn()
+    .mockResolvedValueOnce(jsonResponse({ access_token: "a", refresh_token: "wrong" }))
+    .mockResolvedValueOnce(jsonResponse({ emailAddress: "wrong@example.com" })));
+  await expect(completeOAuthCallback(env, "code", state)).rejects.toThrow(/does not match/);
+  expect(await getRefreshToken(env, "personal")).toBeNull();
 });
