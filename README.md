@@ -39,6 +39,14 @@ src/
   summarize.ts     Workers AI summary/reply, with heuristic fallback
   digest.ts        Daily digest formatting (SPEC.md §4)
   pipeline.ts      Wires the above into classifyEmail / buildDailyDigest
+  multiAccountDigest.ts  Combined digest across Gmail accounts, tagged by inbox
+  scheduled.ts     Daily cron entry point — syncs every connected Gmail account
+  gmail/
+    accounts.ts    Known account keys (work/personal/school) + the one scope used
+    oauth.ts       Consent URL, code exchange, refresh — enforces gmail.readonly only
+    tokenStore.ts  Per-account refresh tokens + OAuth state nonces (Workers KV)
+    client.ts      Gmail API calls — metadata only, never a full message body
+    retention.ts   90-day-TTL classification metadata + latest digest (Workers KV)
   index.ts         Worker entry point (HTTP routes)
 test/              Vitest unit + end-to-end tests (fabricated fixtures only)
 ```
@@ -68,6 +76,20 @@ formatted daily digest text (SPEC.md §4); `emails` is every classified item
 
 ### `GET /health`
 Returns `{ ok: true }`.
+
+### `GET /oauth/start?account=work|personal|school`
+Redirects to Google's consent screen for that Gmail account, requesting only
+`https://www.googleapis.com/auth/gmail.readonly`.
+
+### `GET /oauth/callback`
+Google redirects here after consent. Exchanges the code for tokens, refuses
+and discards anything granting more than read-only Gmail, and stores the
+refresh token for that account (Workers KV, never the repo).
+
+### `GET /digest/latest`
+Returns the most recent daily digest produced by the scheduled Gmail sync,
+plus which accounts are currently connected:
+`{ generatedAt, text, connectedAccounts }`.
 
 ```ts
 interface InboundEmail {
@@ -102,8 +124,8 @@ NORMAL
 [Deadline] This is a reminder that your monthly installment is due by the 5th of this month. — 2026-11-05
 
 LOW
-[Spam/Promotions] Your [redacted].
 [Receipts] Thanks for riding with us.
+[Spam/Promotions] Your one-time verification code is ready.
 [Notifications/GitHub] The nightly build workflow failed on main.
 [Receipts] Your monthly brokerage statement is available to view online.
 [Recruiter/Job] A new Data & Analytics Consultant role just opened at a mid-size firm.
@@ -124,13 +146,40 @@ npx wrangler login     # opens the browser for a one-click OAuth approval
 npx wrangler deploy
 ```
 
-No KV/D1 storage is wired up yet — this ships as stateless classify/digest
-endpoints. SPEC.md §5's 90-day retention rule only matters once a storage
-layer (e.g. Workers KV with a TTL) is added; nothing is persisted today.
+`/classify` and `/digest` are stateless. The Gmail integration adds:
+
+- A `Workers KV` namespace (`INBOX_KV`) holding per-account refresh tokens,
+  OAuth state nonces, 90-day-TTL classification metadata, and the latest
+  combined digest — see SPEC.md §5 and [`src/gmail/retention.ts`](./src/gmail/retention.ts).
+- A daily cron trigger (`[triggers]` in `wrangler.toml`) that runs
+  [`src/scheduled.ts`](./src/scheduled.ts) once a day, syncing every Gmail
+  account that has completed consent.
+- Two Worker secrets — `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — for
+  the Google OAuth client, set via `wrangler secret put` and never committed:
+
+  ```bash
+  npx wrangler secret put GOOGLE_CLIENT_ID
+  npx wrangler secret put GOOGLE_CLIENT_SECRET
+  ```
+
+  These come from a Google Cloud OAuth 2.0 Client (Gmail API enabled),
+  configured with redirect URI
+  `https://inbox-triage-api.inbox-triage-api.workers.dev/oauth/callback`
+  and scope `https://www.googleapis.com/auth/gmail.readonly` only. Creating
+  that client is an account-level decision (app branding, verification
+  status) made by whoever owns the Google Cloud project, not by this repo.
+- Once secrets are set, connect each inbox once by visiting
+  `/oauth/start?account=work` (then `personal`, then `school`) and
+  completing Google's consent screen.
 
 ## Privacy
 
 - No real email addresses, names, or message content are committed to this
   repo — all test fixtures are fabricated.
-- No secrets, API keys, or Cloudflare account IDs are committed; `wrangler
-  deploy` reads account/auth state from the local `wrangler login` session.
+- No secrets, API keys, Cloudflare account IDs, or OAuth tokens are
+  committed; `wrangler deploy` reads account/auth state from the local
+  `wrangler login` session, and Gmail refresh tokens live only in Workers KV.
+- Gmail messages are fetched in `metadata` format (headers + snippet only)
+  — the full message body is never requested or stored (SPEC.md §5).
+- Classification metadata and the latest digest auto-expire from KV after
+  90 days via `expirationTtl`; no manual cleanup job is needed.
