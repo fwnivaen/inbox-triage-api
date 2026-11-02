@@ -64,18 +64,51 @@ npm run dev        # wrangler dev — requires `npx wrangler login` once,
 
 ## API
 
-### `POST /classify`
+### Agent-fed mode (primary usage)
+
+`/classify` and `/digest` are the primary way this API is used in practice:
+an assistant with its own mail access (reading sir's real inboxes) POSTs
+batches of mail here to get them classified and digested, instead of this
+Worker pulling mail itself. Both routes require a bearer token — the Worker
+secret `DIGEST_API_KEY` — so only an authorized caller can feed it real mail.
+
+```bash
+curl -s https://inbox-triage-api.inbox-triage-api.workers.dev/digest \
+  -H "Authorization: Bearer <DIGEST_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '[{
+    "id": "1",
+    "fromAddress": "someone@example.com",
+    "fromName": "Someone",
+    "subject": "Can we reschedule?",
+    "body": "Would Thursday work instead?",
+    "receivedAt": "2026-11-02T12:00:00Z",
+    "hasAttachment": false
+  }]'
+```
+
+A request with a missing or wrong token gets `401 Unauthorized` before the
+body is even read — nothing from an unauthorized POST is parsed, classified,
+or logged.
+
+### `POST /classify` *(requires bearer token)*
 Body: a single `InboundEmail` object, or an array of them.
 Returns the matching `ClassifiedEmail` (or array) per SPEC.md §3.
 
-### `POST /digest`
+### `POST /digest` *(requires bearer token)*
 Body: an array of `InboundEmail`.
 Returns `{ digest: string, emails: ClassifiedEmail[] }` — `digest` is the
 formatted daily digest text (SPEC.md §4); `emails` is every classified item
 (including Newsletters, which are labeled but excluded from `digest` itself).
 
 ### `GET /health`
-Returns `{ ok: true }`.
+Returns `{ ok: true }`. No token required.
+
+### Gmail OAuth mode (optional)
+
+The Worker can also pull mail itself via Gmail's read-only API, instead of
+being fed by an agent. This is fully built but optional — leave the Google
+OAuth secrets unset to run in agent-fed mode only.
 
 ### `GET /oauth/start?account=work|personal|school`
 Redirects to Google's consent screen for that Gmail account, requesting only
@@ -87,8 +120,8 @@ and discards anything granting more than read-only Gmail, and stores the
 refresh token for that account (Workers KV, never the repo).
 
 ### `GET /digest/latest`
-Returns the most recent daily digest produced by the scheduled Gmail sync,
-plus which accounts are currently connected:
+Returns the most recent daily digest — from either mode, whichever last
+saved one — plus which Gmail accounts are currently connected:
 `{ generatedAt, text, connectedAccounts }`.
 
 ```ts
@@ -146,7 +179,18 @@ npx wrangler login     # opens the browser for a one-click OAuth approval
 npx wrangler deploy
 ```
 
-`/classify` and `/digest` are stateless. The Gmail integration adds:
+A Worker secret protects agent-fed mode:
+
+```bash
+openssl rand -hex 32 | npx wrangler secret put DIGEST_API_KEY
+```
+
+Save the same value locally (outside the repo) for whatever calls `/digest`
+or `/classify`, e.g. `~/.config/inbox-triage/key` with `chmod 600`. `/health`
+needs no token; `/classify` and `/digest` reject every request with `401`
+until `DIGEST_API_KEY` is set — there's no "open" fallback mode.
+
+`/classify` and `/digest` are otherwise stateless. The Gmail integration (optional) adds:
 
 - A `Workers KV` namespace (`INBOX_KV`) holding per-account refresh tokens,
   OAuth state nonces, 90-day-TTL classification metadata, and the latest
@@ -179,6 +223,9 @@ npx wrangler deploy
 - No secrets, API keys, Cloudflare account IDs, or OAuth tokens are
   committed; `wrangler deploy` reads account/auth state from the local
   `wrangler login` session, and Gmail refresh tokens live only in Workers KV.
+- Mail POSTed to `/classify` or `/digest` in agent-fed mode is never
+  persisted and never logged — the Worker logs only a count of classified
+  emails, not their bodies, subjects, or addresses.
 - Gmail messages are fetched in `metadata` format (headers + snippet only)
   — the full message body is never requested or stored (SPEC.md §5).
 - Classification metadata and the latest digest auto-expire from KV after
