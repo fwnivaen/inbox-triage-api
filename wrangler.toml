@@ -19,6 +19,20 @@ head_sampling_rate = 0.1
 [ai]
 binding = "AI"
 
-# No KV/D1 binding yet: classify + digest ship as pure request/response
-# endpoints with no persistence. See README.md "Deploying" for what to add
-# once a scheduled Gmail-polling job needs retained state.
+# Stores per-account Gmail refresh tokens (never the full token in plaintext
+# logs), short-lived OAuth state nonces, classified-email metadata with a
+# 90-day TTL (SPEC.md §5 retention), and the latest combined digest. Never
+# stores full message bodies or full email addresses — see src/gmail/*.
+[[kv_namespaces]]
+binding = "INBOX_KV"
+id = "4446b37cc2ba4e8f93996bd03a986edc"
+
+# Daily multi-account Gmail sync + digest (see src/scheduled.ts). Time is UTC;
+# 13:00 UTC = 8am EST / 9am EDT. Adjust to taste.
+[triggers]
+crons = ["0 13 * * *"]
+
+# Non-secret config. GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set via
+# `wrangler secret put` — never here, never in source.
+[vars]
+WORKER_BASE_URL = "https://inbox-triage-api.inbox-triage-api.workers.dev"
