@@ -8,8 +8,10 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "pretest": "wrangler types",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretypecheck": "wrangler types",
     "typecheck": "tsc --noEmit",
     "sample-digest": "tsx scripts/sample-digest.ts"
   },
