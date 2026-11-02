@@ -27,10 +27,11 @@ export async function recordClassification(env: Env, meta: StoredClassification)
 export interface StoredDigest {
   generatedAt: string;
   text: string;
+  accounts?: Record<string, { status: "ok" | "failed" | "not_connected"; count: number }>;
 }
 
-export async function saveLatestDigest(env: Env, text: string): Promise<void> {
-  const value: StoredDigest = { generatedAt: new Date().toISOString(), text };
+export async function saveLatestDigest(env: Env, text: string, accounts?: StoredDigest["accounts"]): Promise<void> {
+  const value: StoredDigest = { generatedAt: new Date().toISOString(), text, accounts };
   await env.INBOX_KV.put(DIGEST_KEY, JSON.stringify(value), { expirationTtl: RETENTION_SECONDS });
 }
 

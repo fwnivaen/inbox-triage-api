@@ -62,6 +62,7 @@ async function handle(request: Request, env: Env, url: URL): Promise<Response> {
   }
 
   if (url.pathname === "/oauth/start" && request.method === "GET") {
+    if (!isAuthorized(request, env)) return json({ error: "Unauthorized" }, 401);
     const account = url.searchParams.get("account") ?? "";
     if (!isGmailAccountKey(account)) {
       return json({ error: `account must be one of: ${GMAIL_ACCOUNTS.join(", ")}` }, 400);
@@ -91,11 +92,18 @@ async function handle(request: Request, env: Env, url: URL): Promise<Response> {
   }
 
   if (url.pathname === "/digest/latest" && request.method === "GET") {
+    if (!isAuthorized(request, env)) return json({ error: "Unauthorized" }, 401);
     const [digest, connected] = await Promise.all([getLatestDigest(env), getConnectedAccounts(env, GMAIL_ACCOUNTS)]);
     if (!digest) {
       return json({ digest: null, connectedAccounts: connected, message: "No digest has run yet." });
     }
     return json({ ...digest, connectedAccounts: connected });
+  }
+
+  if (url.pathname === "/sync" && request.method === "POST") {
+    if (!isAuthorized(request, env)) return json({ error: "Unauthorized" }, 401);
+    await runDailySync(env);
+    return json(await getLatestDigest(env));
   }
 
   return json({ error: "Not found" }, 404);

@@ -43,10 +43,18 @@ async function gmailGet(accessToken: string, path: string): Promise<unknown> {
 export async function listRecentMessageIds(accessToken: string, windowHours = 24): Promise<string[]> {
   const days = Math.max(1, Math.ceil(windowHours / 24));
   const query = encodeURIComponent(`newer_than:${days}d`);
-  const result = (await gmailGet(accessToken, `/messages?q=${query}&maxResults=50`)) as {
-    messages?: { id: string }[];
-  };
-  return (result.messages ?? []).map((m) => m.id);
+  const ids = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({ q: decodeURIComponent(query), maxResults: "100" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const result = await gmailGet(accessToken, `/messages?${params}`) as {
+      messages?: { id: string }[]; nextPageToken?: string;
+    };
+    for (const message of result.messages ?? []) ids.add(message.id);
+    pageToken = result.nextPageToken;
+  } while (pageToken);
+  return [...ids];
 }
 
 /**

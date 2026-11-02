@@ -1,7 +1,7 @@
 import { GMAIL_ACCOUNTS, type GmailAccountKey } from "./gmail/accounts.js";
 import { getMessageAsInboundEmail, listRecentMessageIds } from "./gmail/client.js";
 import { refreshAccessToken } from "./gmail/oauth.js";
-import { recordClassification, saveLatestDigest } from "./gmail/retention.js";
+import { recordClassification, saveLatestDigest, type StoredDigest } from "./gmail/retention.js";
 import { getRefreshToken } from "./gmail/tokenStore.js";
 import { buildMultiAccountDigest, type AccountClassifiedEmail } from "./multiAccountDigest.js";
 import { classifyEmail } from "./pipeline.js";
@@ -16,20 +16,21 @@ import { classifyEmail } from "./pipeline.js";
 export async function runDailySync(env: Env): Promise<string> {
   const tagged: AccountClassifiedEmail[] = [];
 
+  const accounts: NonNullable<StoredDigest["accounts"]> = {};
   for (const account of GMAIL_ACCOUNTS) {
-    await syncAccount(env, account, tagged);
+    accounts[account] = await syncAccount(env, account, tagged);
   }
 
   const digest = buildMultiAccountDigest(tagged);
-  await saveLatestDigest(env, digest);
+  await saveLatestDigest(env, digest, accounts);
   return digest;
 }
 
-async function syncAccount(env: Env, account: GmailAccountKey, out: AccountClassifiedEmail[]): Promise<void> {
-  const refreshToken = await getRefreshToken(env, account);
-  if (!refreshToken) return; // not connected yet
-
+async function syncAccount(env: Env, account: GmailAccountKey, out: AccountClassifiedEmail[]): Promise<{ status: "ok" | "failed" | "not_connected"; count: number }> {
+  const start = out.length;
   try {
+    const refreshToken = await getRefreshToken(env, account);
+    if (!refreshToken) return { status: "not_connected", count: 0 };
     const accessToken = await refreshAccessToken(env, refreshToken);
     const ids = await listRecentMessageIds(accessToken, 24);
 
@@ -49,8 +50,10 @@ async function syncAccount(env: Env, account: GmailAccountKey, out: AccountClass
     }
 
     console.log(JSON.stringify({ message: "gmail sync ok", account, count: ids.length }));
+    return { status: "ok", count: ids.length };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(JSON.stringify({ message: "gmail sync failed", account, error: message }));
+    return { status: "failed", count: out.length - start };
   }
 }

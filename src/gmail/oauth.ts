@@ -86,6 +86,16 @@ export async function completeOAuthCallback(env: Env, code: string, state: strin
     throw new Error("Google did not return a refresh token — try the consent link again.");
   }
 
+  const expected = JSON.parse(env.GMAIL_ACCOUNT_EMAILS ?? "{}") as Partial<Record<GmailAccountKey, string>>;
+  if (!expected[account]) throw new Error("Expected Gmail account identity is not configured.");
+  const profile = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+    headers: { authorization: `Bearer ${tokens.access_token}` },
+  });
+  if (!profile.ok) throw new Error(`Gmail identity verification failed: ${profile.status}`);
+  const identity = await profile.json() as { emailAddress?: string };
+  if (identity.emailAddress?.toLowerCase() !== expected[account]!.toLowerCase()) {
+    throw new Error("Selected Google account does not match the requested inbox.");
+  }
   await setRefreshToken(env, account, tokens.refresh_token);
   return { account };
 }
