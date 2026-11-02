@@ -1,6 +1,6 @@
 import { buildDigest } from "./digest.js";
 import { classifyBatch, classifyEmail } from "./pipeline.js";
-import type { Env, InboundEmail } from "./types.js";
+import type { InboundEmail } from "./types.js";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -23,34 +23,45 @@ function isInboundEmail(value: unknown): value is InboundEmail {
   );
 }
 
+async function handle(request: Request, env: Env, url: URL): Promise<Response> {
+  if (url.pathname === "/health") {
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/classify" && request.method === "POST") {
+    const body = await request.json().catch(() => null);
+    if (isInboundEmail(body)) {
+      return json(await classifyEmail(body, env));
+    }
+    if (Array.isArray(body) && body.every(isInboundEmail)) {
+      return json(await classifyBatch(body, env));
+    }
+    return json({ error: "Expected an InboundEmail or InboundEmail[] body." }, 400);
+  }
+
+  if (url.pathname === "/digest" && request.method === "POST") {
+    const body = await request.json().catch(() => null);
+    if (!Array.isArray(body) || !body.every(isInboundEmail)) {
+      return json({ error: "Expected an InboundEmail[] body." }, 400);
+    }
+    const classified = await classifyBatch(body, env);
+    return json({ digest: buildDigest(classified), emails: classified });
+  }
+
+  return json({ error: "Not found" }, 404);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    console.log(JSON.stringify({ message: "incoming request", method: request.method, path: url.pathname }));
 
-    if (url.pathname === "/health") {
-      return json({ ok: true });
+    try {
+      return await handle(request, env, url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(JSON.stringify({ message: "unhandled error", error: message, path: url.pathname }));
+      return json({ error: "Internal server error" }, 500);
     }
-
-    if (url.pathname === "/classify" && request.method === "POST") {
-      const body = await request.json().catch(() => null);
-      if (isInboundEmail(body)) {
-        return json(await classifyEmail(body, env));
-      }
-      if (Array.isArray(body) && body.every(isInboundEmail)) {
-        return json(await classifyBatch(body, env));
-      }
-      return json({ error: "Expected an InboundEmail or InboundEmail[] body." }, 400);
-    }
-
-    if (url.pathname === "/digest" && request.method === "POST") {
-      const body = await request.json().catch(() => null);
-      if (!Array.isArray(body) || !body.every(isInboundEmail)) {
-        return json({ error: "Expected an InboundEmail[] body." }, 400);
-      }
-      const classified = await classifyBatch(body, env);
-      return json({ digest: buildDigest(classified), emails: classified });
-    }
-
-    return json({ error: "Not found" }, 404);
   },
-};
+} satisfies ExportedHandler<Env>;

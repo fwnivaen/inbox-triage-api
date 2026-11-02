@@ -3,7 +3,7 @@ import { buildDigest } from "./digest.js";
 import { computePriority } from "./priority.js";
 import { safePreview } from "./privacy.js";
 import { summarizeAndReply } from "./summarize.js";
-import type { ClassifiedEmail, Env, InboundEmail } from "./types.js";
+import type { ClassifiedEmail, InboundEmail } from "./types.js";
 
 /** Full per-email pipeline: label -> priority -> summary/reply (SPEC.md §3). */
 export async function classifyEmail(email: InboundEmail, env?: Env): Promise<ClassifiedEmail> {

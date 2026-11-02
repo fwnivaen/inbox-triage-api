@@ -14,6 +14,7 @@ const SSN_PATTERN = /\b\d{3}-\d{2}-\d{4}\b/g;
 const ACCOUNT_NUMBER_NEAR_BALANCE =
   /\b(account|acct)\.?\s*(#|no\.?|number)?\s*[:\s]*\d{4,}\b/gi;
 const CARD_NUMBER_PATTERN = /\b(?:\d[ -]*?){13,16}\b/g;
+const REDACTION_PLACEHOLDER_PATTERN = /\[redacted[a-z-]*\]/gi;
 
 /** Redact OTPs, tokens, SSNs, and account/card numbers from free text. */
 export function redactSensitive(text: string): string {
@@ -25,6 +26,17 @@ export function redactSensitive(text: string): string {
   out = out.replace(CARD_NUMBER_PATTERN, "[redacted-number]");
   out = out.replace(ACCOUNT_NUMBER_NEAR_BALANCE, "account [redacted]");
   return out;
+}
+
+/**
+ * True if `text` still carries real content once redaction placeholders are
+ * stripped out. A short line that is almost entirely "[redacted]" (e.g. an
+ * OTP email whose whole first sentence was a verification code) reads as
+ * length > 0 but tells the reader nothing — callers should treat that as
+ * "no usable summary" and fall back to something else, such as the subject.
+ */
+export function hasInformativeContent(text: string, minChars = 10): boolean {
+  return text.replace(REDACTION_PLACEHOLDER_PATTERN, "").trim().length > minChars;
 }
 
 /** First name only — never the full display name if it looks like "First Last <addr>". */
