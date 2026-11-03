@@ -1,0 +1,72 @@
+{
+  "fixtures": [
+    {
+      "account": "work",
+      "fromAddress": "edition@publication.example",
+      "fromName": "Alex Example",
+      "receivedAt": "2026-11-03T03:33:47.560932+00:00",
+      "hasAttachment": false,
+      "subject": "Evening market update",
+      "body": "Plus big news. Is this email difficult to read? View in browser.",
+      "id": "fabricated-quality-publication"
+    },
+    {
+      "account": "work",
+      "fromAddress": "offers@coffee.example",
+      "fromName": "Cafe Team",
+      "receivedAt": "2026-11-03T03:33:47.560932+00:00",
+      "hasAttachment": false,
+      "subject": "Claim your free drink",
+      "body": "Use your exclusive offer by Sunday, November 8, 2026.",
+      "id": "fabricated-quality-promotion"
+    },
+    {
+      "account": "work",
+      "fromAddress": "alex@example.edu",
+      "fromName": "Alex Example",
+      "receivedAt": "2026-11-03T03:33:47.560932+00:00",
+      "hasAttachment": false,
+      "subject": "Re: Registration update",
+      "body": "This has been approved. Please recheck your registration time in a few days. Please let me know if you have any questions.",
+      "id": "fabricated-quality-resolved"
+    },
+    {
+      "account": "work",
+      "fromAddress": "noreply@github.com",
+      "fromName": "GitHub",
+      "receivedAt": "2026-11-03T03:33:47.560932+00:00",
+      "hasAttachment": false,
+      "subject": "Sudo authentication code",
+      "body": "Please verify your identity. Your one-time authentication code is [code]. This code is valid for 15 minutes.",
+      "id": "fabricated-quality-authentication"
+    },
+    {
+      "account": "work",
+      "fromAddress": "notify@card.example",
+      "fromName": "Card Team",
+      "receivedAt": "2026-11-03T03:33:47.560932+00:00",
+      "hasAttachment": false,
+      "subject": "Your new card was delivered",
+      "body": "Your credit card is ready. Activate your card to use it.",
+      "id": "fabricated-quality-activation"
+    },
+    {
+      "account": "work",
+      "fromAddress": "alex@example.edu",
+      "fromName": "Alex Example",
+      "receivedAt": "2026-11-03T03:33:47.560932+00:00",
+      "hasAttachment": false,
+      "subject": "Interview timing",
+      "body": "Please share a suitable time for our remote interview.",
+      "id": "fabricated-quality-availability"
+    }
+  ],
+  "expected": [
+    "Review",
+    "Review",
+    "Review",
+    "Review",
+    "Actions",
+    "Needs Reply"
+  ]
+}
