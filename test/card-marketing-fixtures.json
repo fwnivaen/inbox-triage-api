@@ -1,0 +1,26 @@
+{
+  "fixtures": [
+    {
+      "fromAddress": "offers@example.com",
+      "fromName": "Example Rewards",
+      "receivedAt": "2026-11-03T05:47:01.760101+00:00",
+      "hasAttachment": false,
+      "id": "fabricated-card-promotional-wrapper",
+      "subject": "Your metal rewards Mastercard was delivered. Here is what is waiting for you.",
+      "body": "Cash back, full Spend Power, and more \u2014 just activate. Your Example Mastercard perks are ready and waiting. Here is what is waiting for you Alex, your Example Mastercard is ready to go. Activate it"
+    },
+    {
+      "fromAddress": "offers@example.com",
+      "fromName": "Example Rewards",
+      "receivedAt": "2026-11-03T05:47:01.760101+00:00",
+      "hasAttachment": false,
+      "id": "fabricated-sportswear-question",
+      "subject": "Have You Seen Our New Sportswear Arrivals?",
+      "body": "The perfect picks to power your performance"
+    }
+  ],
+  "expected": [
+    "Actions",
+    "Review"
+  ]
+}

@@ -403,3 +403,9 @@ in previews are decoded before privacy filtering. Explicit new requests after
 an approval remain reply tasks. Card context plus "activate it" is an action;
 a bare activation pronoun without card context is insufficient. These rules
 require no new fields or raw mail headers in the ingestion contract.
+
+Promotional sender mailboxes (offers, deals, marketing and promotions) are treated
+as automated for reply detection. Concrete banking/security and card activation
+actions remain eligible for Actions. Card activation accepts described product
+names ending in "card", with bounded context after "your"/"the" plus an explicit
+"activate it" request; no payment brand exception is used.
