@@ -394,3 +394,12 @@ card activation, and human interview time requests. Courtesy invitations do not
 cancel a resolution; an explicit new request does. OTP notices stay in Review,
 while observed security changes and financial warnings remain Actions, even
 when authentication-code language is also present.
+
+Question marks alone do not create reply tasks. Reply detection requires an
+explicit request or a question directed to the recipient; undirected editorial
+questions stay in Review. Browser-view boilerplate and truncated courtesy
+endings are removed before that decision. Numeric/common named HTML entities
+in previews are decoded before privacy filtering. Explicit new requests after
+an approval remain reply tasks. Card context plus "activate it" is an action;
+a bare activation pronoun without card context is insufficient. These rules
+require no new fields or raw mail headers in the ingestion contract.

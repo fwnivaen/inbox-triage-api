@@ -1,0 +1,46 @@
+{
+  "fixtures": [
+    {
+      "fromAddress": "alex@example.edu",
+      "fromName": "Alex Example",
+      "receivedAt": "2026-11-03T05:44:02.021423+00:00",
+      "hasAttachment": false,
+      "id": "fabricated-followup-investment-publication",
+      "subject": "Technology wealth briefing",
+      "body": "The first waves created fortunes. Could the next wave be even bigger?"
+    },
+    {
+      "fromAddress": "alex@example.edu",
+      "fromName": "Alex Example",
+      "receivedAt": "2026-11-03T05:44:02.021423+00:00",
+      "hasAttachment": false,
+      "id": "fabricated-followup-eligibility-browser-footer",
+      "subject": "Retirement Plan Eligibility Notice",
+      "body": "Can&#39;t view this email? See it online. Congratulations! You are eligible to participate in a retirement plan."
+    },
+    {
+      "fromAddress": "alex@example.edu",
+      "fromName": "Alex Example",
+      "receivedAt": "2026-11-03T05:44:02.021423+00:00",
+      "hasAttachment": false,
+      "id": "fabricated-followup-truncated-approved-courtesy",
+      "subject": "Re: Course registration",
+      "body": "This has been approved. Please recheck your registration time in a few days. Please let me know if you have"
+    },
+    {
+      "fromAddress": "alex@example.edu",
+      "fromName": "Alex Example",
+      "receivedAt": "2026-11-03T05:44:02.021423+00:00",
+      "hasAttachment": false,
+      "id": "fabricated-followup-delivered-card-activation",
+      "subject": "Your replacement card was delivered",
+      "body": "Your card perks are ready and waiting. Your card is ready to go. Activate it"
+    }
+  ],
+  "expected": [
+    "Review",
+    "Review",
+    "Review",
+    "Actions"
+  ]
+}
