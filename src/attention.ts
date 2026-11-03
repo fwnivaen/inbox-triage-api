@@ -1,3 +1,4 @@
+import { FINANCIAL_RISK } from "./signals.js";
 import { extractDeadline } from './deadline.js';
 import { computePriority } from './priority.js';
 import type { ClassifiedEmail } from './types.js';
@@ -11,17 +12,18 @@ export function attentionMetadata(text:string,receivedAt:Date) {
   else if(/\btomorrow\b/i.test(text)) meetingDate=easternDate(new Date(receivedAt.getTime()+86400000));
   else if(/\b\d{4}-\d{2}-\d{2}\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d/i.test(text)) meetingDate=extractDeadline(text,receivedAt);
  }
- return {meetingDate,actionRequired:ACTION.test(text)};
+ return {meetingDate,actionRequired:ACTION.test(text) || FINANCIAL_RISK.test(text) || /\b(?:support (?:case|request)|case (?:open|pending)|ticket|financial (?:aid|support).{0,30}(?:review|required|pending))\b/i.test(text)};
 }
 /** Re-evaluate stored safe facts without retaining original mail or invoking AI. */
 export function currentAttention(email:ClassifiedEmail,receivedAt:string,now:Date):ClassifiedEmail {
  const today=easternDate(now);
+ if(email.attentionSuppressed) return {...email,route:"Review",deadline:null,priority:"low",suggested_reply:null};
  const fallback=attentionMetadata(email.summary,new Date(receivedAt));
  const meetingDate=email.meetingDate ?? (email.route==='Meetings Today' ? easternDate(new Date(receivedAt)) : fallback.meetingDate);
  const activeDeadline=email.deadline && email.deadline>=today ? email.deadline : null;
- const action=email.actionRequired ?? fallback.actionRequired;
+ const action=Boolean(email.actionRequired || fallback.actionRequired);
  const routine=email.label==='Newsletters' || (email.label==='Spam/Promotions' && !meetingDate && !action);
- const route= !routine && meetingDate===today ? 'Meetings Today' : email.label==='Needs Reply' ? 'Needs Reply' : !routine && activeDeadline ? 'Deadlines' : !routine && action ? 'Actions' : 'Review';
+ const route= !routine && meetingDate===today ? 'Meetings Today' : email.label==='Needs Reply' ? 'Needs Reply' : !routine && activeDeadline ? 'Deadlines' : action ? 'Actions' : 'Review';
  const baseline=email.basePriority ?? computePriority(email.label,null,email.summary,now);
  const duePriority=computePriority(email.label,activeDeadline,'',now);
  return {...email,route,priority:route==='Meetings Today'||(activeDeadline && duePriority==='urgent') ? 'urgent' : baseline};

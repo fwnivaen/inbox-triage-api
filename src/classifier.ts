@@ -1,3 +1,4 @@
+import { latestText, BROADCAST, RESOLVED, DIRECT_REQUEST, FINANCIAL_RISK } from "./signals.js";
 import { extractDeadline, hasDeadlineCue } from "./deadline.js";
 import { isAutomatedAddress, safePreview } from "./privacy.js";
 import type { InboundEmail, Label } from "./types.js";
@@ -38,9 +39,6 @@ function isSchoolDomain(domain: string): boolean {
   return SCHOOL_DOMAIN_SUFFIXES.some((suffix) => domain.endsWith(suffix));
 }
 
-const QUESTION_OR_THREAD =
-  /(\?|^\s*re:|^\s*fwd?:|\bneed(?:s)? (?:your|a response|an answer|availability)\b|\bplease (?:confirm|respond|reply|see me)\b|\bcan you\b|\bcould you\b|\blet me know\b)/i;
-
 /** A display name that reads like a person, not a team/company/bot. */
 function looksLikePerson(fromName: string): boolean {
   const name = fromName.trim();
@@ -52,9 +50,10 @@ function looksLikePerson(fromName: string): boolean {
 }
 
 function isNeedsReply(email: InboundEmail, preview: string): boolean {
+  if (RESOLVED.test(preview) && !DIRECT_REQUEST.test(preview)) return false;
   if (isAutomatedAddress(email.fromAddress)) return false;
   if (!looksLikePerson(email.fromName)) return false;
-  return QUESTION_OR_THREAD.test(email.subject) || QUESTION_OR_THREAD.test(preview);
+  return /\?/.test(email.subject) || DIRECT_REQUEST.test(email.subject) || /\?/.test(preview) || DIRECT_REQUEST.test(preview);
 }
 
 function isRecruiterJob(email: InboundEmail, text: string): boolean {
@@ -119,10 +118,17 @@ export interface ClassificationResult {
  * specific category claims the message. `deadline` is always extracted
  * whenever a cue is present, regardless of which label wins.
  */
-export function classifyLabel(email: InboundEmail, receivedAt: Date): ClassificationResult {
-  const preview = safePreview(email.body);
+export function classifyLabel(email: InboundEmail, receivedAt: Date, ownAddresses: string[] = []): ClassificationResult {
+  const preview = safePreview(latestText(email.body));
   const text = `${email.subject} ${preview}`;
-  const deadline = hasDeadlineCue(text) ? extractDeadline(text, receivedAt) : null;
+  const broadcast=isNewsletter(email,text) || BROADCAST.test(text);
+  const self=ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase());
+  const resolved=RESOLVED.test(preview) && !DIRECT_REQUEST.test(preview);
+  const social=matchesAny(domainOf(email.fromAddress),["linkedin.com","facebookmail.com","instagram.com","twitter.com","x.com"]);
+  const deadline = !broadcast && !social && !self && !resolved && hasDeadlineCue(text) ? extractDeadline(text, receivedAt) : null;
+  if (broadcast && !FINANCIAL_RISK.test(text)) return {label:isNewsletter(email,text) || /newsletter|digest|puzzle|crossword/i.test(text) ? "Newsletters" : "Spam/Promotions",deadline:null};
+  if (self) return {label:"Notifications/GitHub",deadline:null};
+  if (FINANCIAL_RISK.test(text)) return {label:/security alert|unrecognized|unauthorized|account (?:locked|suspended)|verify your identity/i.test(text) ? "Notifications/GitHub" : "Financial Aid",deadline};
 
   if (isNeedsReply(email, preview)) return { label: "Needs Reply", deadline };
   if (isRecruiterJob(email, text)) return { label: "Recruiter/Job", deadline };

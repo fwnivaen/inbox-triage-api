@@ -1,3 +1,4 @@
+import { latestText, RESOLVED, DIRECT_REQUEST } from "./signals.js";
 import { attentionMetadata, currentAttention } from "./attention.js";
 import { classifyLabel } from "./classifier.js";
 import { buildDigest } from "./digest.js";
@@ -9,20 +10,24 @@ import type { ClassifiedEmail, InboundEmail } from "./types.js";
 /** Full per-email pipeline: label -> priority -> summary/reply (SPEC.md §3). */
 export async function classifyEmail(email: InboundEmail, env?: Env, now = new Date()): Promise<ClassifiedEmail> {
   const receivedAt = new Date(email.receivedAt);
-  const preview = safePreview(email.body);
+  const preview = safePreview(latestText(email.body));
   const text = `${email.subject} ${preview}`;
 
-  const { label, deadline } = classifyLabel(email, receivedAt);
+  let ownAddresses:string[]=[];
+  try { ownAddresses=Object.values(JSON.parse(env?.GMAIL_ACCOUNT_EMAILS ?? '{}')); } catch { /* absent mapping */ }
+  const { label, deadline } = classifyLabel({...email,body:latestText(email.body)}, receivedAt,ownAddresses);
   const priority = computePriority(label, deadline, text, now);
-  const { summary, suggested_reply } = await summarizeAndReply(env, email, label, preview);
+  const { summary, suggested_reply, summarySource } = await summarizeAndReply(env, email, label, preview);
 
   return currentAttention({
     id: email.id,
     label,
     ...attentionMetadata(text,receivedAt),
+    attentionSuppressed: ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase()) || (RESOLVED.test(preview) && !DIRECT_REQUEST.test(preview)),
     basePriority: computePriority(label,null,text,now),
     priority,
     summary,
+    summarySource,
     deadline,
     suggested_reply,
     has_attachment: email.hasAttachment,

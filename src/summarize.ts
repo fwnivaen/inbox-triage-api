@@ -41,6 +41,7 @@ export function heuristicReply(email: InboundEmail, label: Label): string | null
 }
 
 export interface SummaryResult {
+  summarySource: "ai" | "fallback";
   summary: string;
   suggested_reply: string | null;
 }
@@ -57,6 +58,7 @@ export async function summarizeAndReply(
   preview: string,
 ): Promise<SummaryResult> {
   const fallback: SummaryResult = {
+    summarySource:"fallback",
     summary: heuristicSummary(email, preview),
     suggested_reply: heuristicReply(email, label),
   };
@@ -87,6 +89,7 @@ export async function summarizeAndReply(
         ? redactSensitive(parsed.suggested_reply).slice(0,800)
         : "";
     return {
+      summarySource:hasInformativeContent(redactedSummary) ? "ai" : "fallback",
       // The model only ever sees the already-redacted preview, so it can echo
       // a near-content-free stub (e.g. "Your [redacted]."); treat that the
       // same as "no usable AI summary" and fall back to the heuristic.

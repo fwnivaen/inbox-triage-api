@@ -48,6 +48,23 @@ export class IngestionStore {
    return privateJson(result);
   }
   const input=await request.json() as {entries:Entry[];accounts:Partial<Record<GmailAccountKey,Coverage>>;exclude?:{account:GmailAccountKey;id:string}[]};
+  if(new URL(request.url).pathname==='/repair') {
+   const result=await this.state.storage.transaction(async storage=>{
+    for(const entry of input.entries) {
+     const existing=await storage.get<Entry>(`message:${entry.email.account}:${entry.email.id}`);
+     if(!existing || Date.parse(existing.receivedAt)!==Date.parse(entry.receivedAt)) return {error:"Repair requires existing message IDs and original receivedAt",status:409};
+    }
+    for(const entry of input.entries) {
+     const key=`message:${entry.email.account}:${entry.email.id}`;
+     const existing=await storage.get<Entry>(key);
+     await storage.put(key,{...entry,receivedAt:existing!.receivedAt});
+    }
+    const latest=await storage.get<Record<string,unknown>>('latest') ?? {};
+    const result={...latest,repaired:input.entries.length,repairedAt:new Date().toISOString(),text:await render(storage,new Date())};
+    await storage.put('latest',result);return result;
+   });
+   return privateJson(result,'status' in result ? 409 : 200);
+  }
   await this.state.storage.setAlarm(Date.now()+86400000);
   const result=await this.state.storage.transaction(async storage=>{
    let inserted=0;
@@ -97,4 +114,14 @@ export async function excludeMessages(body:unknown,env:Env):Promise<Response> {
  const messages=(body as {messages?:unknown})?.messages;
  if(!Array.isArray(messages)||messages.length>MAX_BATCH||messages.some(m=>!m||!isGmailAccountKey(m.account)||typeof m.id!=="string"||!/^[a-zA-Z0-9:_-]{1,200}$/.test(m.id))) return privateJson({error:"Invalid exclusion list"},400);
  return env.INGESTION.get(env.INGESTION.idFromName("consolidated")).fetch("https://internal/exclude",{method:"POST",body:JSON.stringify({entries:[],accounts:{},exclude:messages})});
+}
+
+/** Explicit existing-only repair. Does not advance intake coverage or insert messages. */
+export async function repairMessages(body:unknown,env:Env):Promise<Response> {
+ const emails=(body as {emails?:unknown})?.emails;
+ if(!Array.isArray(emails)||!emails.length||emails.length>MAX_BATCH||emails.some(e=>!isInboundEmail(e)||!isGmailAccountKey((e as unknown as {account:string}).account))) return privateJson({error:"Invalid repair batch"},400);
+ const unique=[...new Map(emails.map(e=>[`${e.account}:${e.id}`,e])).values()];
+ const entries:Entry[]=[];
+ for(let i=0;i<unique.length;i+=4) entries.push(...await Promise.all(unique.slice(i,i+4).map(async email=>({email:{...await classifyEmail(email,env),account:email.account},receivedAt:email.receivedAt}))));
+ return env.INGESTION.get(env.INGESTION.idFromName('consolidated')).fetch('https://internal/repair',{method:'POST',body:JSON.stringify({entries,accounts:{}})});
 }
