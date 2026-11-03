@@ -350,3 +350,30 @@ attention items. Capacity exhaustion returns a generic failure rather than a
 silently incomplete digest; callers must retain checkpoints and alert. This
 keeps allocations bounded as 90-day retention grows. Private responses include
 `Cache-Control: no-store` on ingestion, correction and retrieval paths.
+
+### Correcting previously classified messages
+
+`POST /ingest/repair` requires the same bearer credential as ingestion. Supply
+`{"emails": [InboundEmail + {"account":"work|personal|school"}]}` with at most
+100 items and a JSON request below 1 MB. Use each original Gmail **message ID**
+and original `receivedAt`; send only the redacted bounded metadata used for
+classification. Do not use thread IDs. Every ID and arrival time must match an
+existing stored record or the whole batch returns 409 without writes.
+
+This explicit repair replaces derived classification, summary and attention facts;
+it inserts no mail, advances no intake cursor, and preserves coverage counts,
+coverage timestamps and the original digest `generatedAt`. Exclusions remain in
+force. `repaired` and `repairedAt` report repair activity. `/digest/latest` renders
+these stored repairs immediately against the current Eastern date and rolling
+24-hour window. Ordinary `/ingest` replay remains first-write-wins. Repair does
+not change Gmail labels or send replies. Old records cannot be reliably rebuilt
+from their summaries alone: the authorized ingestion owner must supply the
+original redacted metadata for the IDs needing correction.
+
+`/classify` outputs `summarySource: "ai" | "fallback"`; this describes summary
+generation only. Labels, deadlines, priorities and routes remain deterministic.
+Quoted history does not supply new requests/deadlines. Broadcast questions and
+promotional expiry do not become personal reply tasks; financial/security
+warnings and concrete support requests remain visible as Actions. An approval
+without a new request does not require a reply. Configured inbox identities
+suppress incoming self-mail from personal reply routing.

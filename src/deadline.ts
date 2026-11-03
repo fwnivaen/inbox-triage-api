@@ -30,6 +30,21 @@ export function hasDeadlineCue(text: string): boolean {
 }
 
 export function extractDeadline(text: string, receivedAt: Date): string | null {
+  // Bind a date to its own action cue rather than the first publication/history date.
+  const cues=[...text.matchAll(/\b(?:due|deadline|last day|expires?|closes?|closing|rsvp by|submit by|apply by|renew by|by)\b/gi)];
+  if(cues.length) {
+    for(const cue of cues) {
+      const tail=text.slice(cue.index!+cue[0].length).split(/[!?.\n]/)[0].slice(0,80);
+      if(!/^\s*(?:(?:is|on|at|by|the|:|for)\s*)*(?:\d|today|tomorrow|this|in |jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|sun|mon|tue|wed|thu|fri|sat)/i.test(tail)) continue;
+      const relative=tail.match(/^\s*(?:(?:is|on|at|by|the|:|for)\s*)*(today|tomorrow)\b/i);
+      const found=parseDate(relative ? relative[1] : cue[0]+tail,receivedAt);
+      if(found) return found;
+    }
+    return null;
+  }
+  return parseDate(text,receivedAt);
+}
+function parseDate(text: string, receivedAt: Date): string | null {
   const lower = text.toLowerCase();
 
   // YYYY-MM-DD

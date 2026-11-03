@@ -1,3 +1,4 @@
+import { FINANCIAL_RISK } from "./signals.js";
 import type { Label, Priority } from "./types.js";
 
 const MONEY_OR_SCHOOL_REQUIREMENT =
@@ -29,6 +30,7 @@ export function computePriority(
   text: string,
   now: Date,
 ): Priority {
+  if (FINANCIAL_RISK.test(text)) return "urgent";
   if (label === "Newsletters" || label === "Spam/Promotions") return "low";
 
   const hours = hoursUntil(deadline, now);
@@ -49,7 +51,7 @@ export function computePriority(
   if (label === "Needs Reply" || label === "Deadline") return "normal";
   if (label === "Recruiter/Job") return CONCRETE_NEXT_STEP.test(text) ? "normal" : "low";
   if (label === "School") return GRADES_ASSIGNMENTS_ADVISING.test(text) ? "normal" : "low";
-  if (label === "Financial Aid") return FINANCIAL_AID_INFORMATIONAL.test(text) ? "normal" : "low";
+  if (label === "Financial Aid") return (FINANCIAL_AID_INFORMATIONAL.test(text) || /support (?:case|request)|pending review|ticket/i.test(text)) ? "normal" : "low";
   if (label === "Receipts") return RECEIPT_NEEDS_REVIEW.test(text) ? "normal" : "low";
   if (label === "Notifications/GitHub") return "low";
 

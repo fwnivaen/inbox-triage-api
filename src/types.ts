@@ -26,6 +26,8 @@ export interface InboundEmail {
 /** Per-email output shape (SPEC.md §3). Never includes a full email address. */
 export interface ClassifiedEmail {
   id: string;
+  attentionSuppressed?: boolean;
+  summarySource?: "ai" | "fallback";
   meetingDate?: string | null;
   actionRequired?: boolean;
   basePriority?: Priority;

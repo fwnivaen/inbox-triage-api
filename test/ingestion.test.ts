@@ -1,6 +1,6 @@
 import { expect,it,vi } from 'vitest';
 import worker from '../src/index.js';
-import { ingest,IngestionStore,excludeMessages } from '../src/ingestion.js';
+import { ingest,IngestionStore,excludeMessages,repairMessages } from '../src/ingestion.js';
 import { fakeKv } from './fakeKv.js';
 const email={id:'message-1',account:'work',fromAddress:'sam@example.com',fromName:'Sam Example',subject:'Please reply',body:'Can you confirm a meeting today?',receivedAt:new Date().toISOString(),hasAttachment:false};
 function setup(){
@@ -47,4 +47,19 @@ it('renders idle latest as-of now without refreshing coverage, and pages histori
  const latest=await (await env.INGESTION.get(env.INGESTION.idFromName('consolidated')).fetch('https://internal/latest')).json() as any;
  expect(latest.text).toBe('');expect(latest.accounts.work.checkedAt).toBe(first.accounts.work.checkedAt);expect(latest.generatedAt).toBe(first.generatedAt);expect(latest.renderedAt).not.toBe(first.renderedAt);
  } finally {vi.useRealTimers();}
+});
+
+it('repairs existing derived facts atomically without reingestion, coverage advance or resurrection',async()=>{
+ const {env,data}=setup();
+ const first=await (await ingest({emails:[email],accounts:{work:{status:'ok',count:1}}},env)).json() as any;
+ const fixed=await repairMessages({emails:[{...email,subject:'Weekly digest',body:'Newsletter unsubscribe.'}]},env);
+ expect(fixed.status).toBe(200);
+ const r=await fixed.json() as any;expect(r.repaired).toBe(1);expect(r.text).toBe('');expect(r.accounts).toEqual(first.accounts);expect(r.generatedAt).toBe(first.generatedAt);
+ expect([...data.keys()].filter(k=>k.startsWith('message:'))).toHaveLength(1);
+ const replay=await (await ingest({emails:[email],accounts:{}},env)).json() as any;expect(replay.error).toBeDefined();
+ const missing=await repairMessages({emails:[{...email,id:'missing'}]},env);expect(missing.status).toBe(409);
+ expect([...data.keys()].filter(k=>k.startsWith('message:'))).toHaveLength(1);
+ expect((await repairMessages({emails:[{...email,receivedAt:'2020-01-01T00:00:00Z'}]},env)).status).toBe(409);
+ await excludeMessages({messages:[{account:'work',id:email.id}]},env);
+ const excluded=await (await repairMessages({emails:[email]},env)).json() as any;expect(excluded.text).toBe('');
 });
