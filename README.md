@@ -377,3 +377,12 @@ promotional expiry do not become personal reply tasks; financial/security
 warnings and concrete support requests remain visible as Actions. An approval
 without a new request does not require a reply. Configured inbox identities
 suppress incoming self-mail from personal reply routing.
+
+Acceptance refinements distinguish subscriber editions/introductory trial expiry
+from actual requests and deadlines. A question mark in a subject alone is not a
+reply request; explicit requests still work with single-name senders such as a
+professor. Flattened `Earlier message:` quoted history is ignored. Routine sign-in
+codes with hypothetical security footers are suppressed, while observed new-sign-in
+security alerts remain actionable. Replacement-card activation is an explicit
+account action. Fabricated acceptance regressions cover each case plus positive
+security and document-deadline counterexamples.

@@ -1,4 +1,4 @@
-import { latestText, RESOLVED, DIRECT_REQUEST } from "./signals.js";
+import { latestText, RESOLVED, DIRECT_REQUEST, routineOtp } from "./signals.js";
 import { attentionMetadata, currentAttention } from "./attention.js";
 import { classifyLabel } from "./classifier.js";
 import { buildDigest } from "./digest.js";
@@ -23,7 +23,7 @@ export async function classifyEmail(email: InboundEmail, env?: Env, now = new Da
     id: email.id,
     label,
     ...attentionMetadata(text,receivedAt),
-    attentionSuppressed: ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase()) || (RESOLVED.test(preview) && !DIRECT_REQUEST.test(preview)),
+    attentionSuppressed: routineOtp(text) || ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase()) || (RESOLVED.test(preview) && !DIRECT_REQUEST.test(preview)),
     basePriority: computePriority(label,null,text,now),
     priority,
     summary,
