@@ -26,3 +26,7 @@ it('keeps concrete account/application actions but suppresses routine ads/announ
  const action=await classifyEmail({...base,subject:'Application incomplete',body:'Please complete your application.'});expect(action.route).toBe('Actions');
  const routine=await classifyEmail({...base,fromAddress:'notice@example.edu',subject:'School weekly announcement',body:'The weekly newsletter is available.'});expect(routine.route).toBe('Review');
 });
+
+it('keeps a deadline urgent late in its Eastern day after UTC midnight',()=>{
+ expect(computePriority('Deadline','2026-11-03','',new Date('2026-11-04T03:00:00Z'))).toBe('urgent');
+});

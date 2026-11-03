@@ -15,7 +15,11 @@ const RECEIPT_NEEDS_REVIEW = /\b(unexpected charge|failed payment|declined|dispu
 
 function hoursUntil(deadline: string | null, now: Date): number | null {
   if (!deadline) return null;
-  const deadlineDate = new Date(`${deadline}T23:59:59Z`);
+  const guess = Date.parse(`${deadline}T23:59:59Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date(guess));
+  const part = (name:string)=>Number(parts.find(p=>p.type===name)?.value);
+  const local = Date.UTC(part("year"),part("month")-1,part("day"),part("hour"),part("minute"),part("second"));
+  const deadlineDate = new Date(guess - (local-guess));
   return (deadlineDate.getTime() - now.getTime()) / 3_600_000;
 }
 
