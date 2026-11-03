@@ -18,6 +18,7 @@ export async function classifyEmail(email: InboundEmail, env?: Env): Promise<Cla
   return {
     id: email.id,
     label,
+    route: label === "Needs Reply" ? "Needs Reply" : /\b(meeting|interview|appointment|call)\b/i.test(text) && /\btoday\b/i.test(text) && receivedAt.toLocaleDateString("en-US", {timeZone:"America/New_York"}) === new Date().toLocaleDateString("en-US", {timeZone:"America/New_York"}) ? "Meetings Today" : deadline ? "Deadlines" : "Review",
     priority,
     summary,
     deadline,
@@ -27,7 +28,10 @@ export async function classifyEmail(email: InboundEmail, env?: Env): Promise<Cla
 }
 
 export async function classifyBatch(emails: InboundEmail[], env?: Env): Promise<ClassifiedEmail[]> {
-  return Promise.all(emails.map((e) => classifyEmail(e, env)));
+  const unique = new Map(emails.map(e => [e.id, e]));
+  const results: ClassifiedEmail[] = [];
+  for (const email of unique.values()) results.push(await classifyEmail(email, env));
+  return results;
 }
 
 export async function buildDailyDigest(emails: InboundEmail[], env?: Env): Promise<string> {

@@ -36,3 +36,11 @@ crons = ["0 13 * * *"]
 # `wrangler secret put` — never here, never in source.
 [vars]
 WORKER_BASE_URL = "https://inbox-triage-api.inbox-triage-api.workers.dev"
+
+[[durable_objects.bindings]]
+name = "INGESTION"
+class_name = "IngestionStore"
+
+[[migrations]]
+tag = "v1-ingestion"
+new_sqlite_classes = ["IngestionStore"]

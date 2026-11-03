@@ -1,3 +1,4 @@
+import { fetchRetry } from "../resilience.js";
 import type { InboundEmail } from "../types.js";
 import type { GmailAccountKey } from "./accounts.js";
 
@@ -30,11 +31,11 @@ export function parseFromHeader(value: string): { name: string; address: string 
 }
 
 async function gmailGet(accessToken: string, path: string): Promise<unknown> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetchRetry(`${API_BASE}${path}`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
-    throw new Error(`Gmail API request failed: ${response.status} ${path}`);
+    throw new Error(`Gmail API request failed: ${response.status}`);
   }
   return response.json();
 }
@@ -45,8 +46,12 @@ export async function listRecentMessageIds(accessToken: string, windowHours = 24
   const query = encodeURIComponent(`newer_than:${days}d`);
   const ids = new Set<string>();
   let pageToken: string | undefined;
+  const pages = new Set<string>();
   do {
     const params = new URLSearchParams({ q: decodeURIComponent(query), maxResults: "100" });
+    if (pageToken && pages.has(pageToken)) throw new Error("Repeated Gmail page token");
+    if (pageToken) pages.add(pageToken);
+    if (pages.size > 50) throw new Error("Gmail pagination limit exceeded");
     if (pageToken) params.set("pageToken", pageToken);
     const result = await gmailGet(accessToken, `/messages?${params}`) as {
       messages?: { id: string }[]; nextPageToken?: string;

@@ -12,7 +12,7 @@ const SECTION_TITLE: Record<Priority, string> = {
 
 function formatLine(email: AccountClassifiedEmail): string {
   const deadlineSuffix = email.deadline ? ` — ${email.deadline}` : "";
-  return `[${email.account}] [${email.label}] ${email.summary}${deadlineSuffix}`;
+  return `[${email.account}] ${email.route ? `[${email.route}] ` : ""}[${email.label}] ${email.summary}${deadlineSuffix}`;
 }
 
 /**

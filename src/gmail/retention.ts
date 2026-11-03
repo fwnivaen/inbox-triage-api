@@ -27,7 +27,7 @@ export async function recordClassification(env: Env, meta: StoredClassification)
 export interface StoredDigest {
   generatedAt: string;
   text: string;
-  accounts?: Record<string, { status: "ok" | "failed" | "not_connected"; count: number }>;
+  accounts?: Record<string, { status: "ok" | "partial" | "failed" | "not_connected"; count: number }>;
 }
 
 export async function saveLatestDigest(env: Env, text: string, accounts?: StoredDigest["accounts"]): Promise<void> {

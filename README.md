@@ -262,3 +262,56 @@ replay lock. Avoid concurrent callback retries. Large inboxes may exceed Worker
 execution or AI quotas; account failures are reported explicitly and can be
 retried via `/sync`. Message-level checkpoints and automatic delivery are not
 implemented in this Worker.
+
+## Connected Gmail production intake
+
+`POST /ingest` is the durable, authenticated incremental intake. Existing Gmail
+connections remain in the assistant's approved account storage; no new Google
+client is required for this mode. The assistant must pull each inbox read-only,
+follow **every** message-list page, and fetch each **message ID** separately
+(thread IDs are not message IDs). Send batches of at most 100 messages / 1 MB:
+
+```json
+{"emails":[{"account":"work","id":"fabricated-message-id","fromAddress":"sam@example.com","fromName":"Sam Example","subject":"Please reply","body":"Can you confirm the appointment?","receivedAt":"2026-11-03T01:00:00Z","hasAttachment":false}],"accounts":{"work":{"status":"partial","count":1},"personal":{"status":"failed","count":0},"school":{"status":"ok","count":0}}}
+```
+
+Use `partial` while paging or when reads fail; use `ok` only after all pages and
+message reads succeed, including a confirmed empty inbox (`count: 0`). Counts
+are the caller's cumulative successfully read messages for that pull. Include
+all three accounts in the final coverage report. Omitted accounts retain their
+previous status and `checkedAt`; `missingAccounts` explicitly lists omissions.
+Coverage is evidence from the caller, not independently verified by the Worker.
+
+Run `python3 scripts/ingest.py` with JSON on stdin. The client reads the designated
+key file, sets a non-default User-Agent, retries transient HTTP failures, and
+prints counts only. Add `--show-digest` for delivery to the owner. Never put the
+key in command arguments or commit real input files. On November 2 the default
+Python urllib User-Agent received Cloudflare **1010 / HTTP 403** even for public
+health; the same request with `InboxTriage/1.0` succeeds. This is an edge client
+filter, not evidence of a bad bearer key.
+
+A SQLite-backed Durable Object atomically retains one redacted classification
+per `(account, message ID)` for 90 days. Retries, replays, and concurrent requests
+cannot duplicate stored entries; distinct replies and inboxes remain distinct.
+The first accepted classification wins. Duplicate processing can consume AI
+work but cannot duplicate persistence. Only redacted summaries/metadata are
+stored, never original sender, subject or body. Daily storage alarms remove
+expired records. The rolling digest includes the latest 24 hours and suppresses
+routine newsletters, receipts, notifications and promotions unless actionable
+by deadline or meeting. Needs Reply, Meetings Today and Deadlines are tagged;
+meetings are detected from explicit `today` language, not a calendar integration.
+Suggested replies are drafts only; no email mutation occurs.
+
+`GET /digest/latest` prefers the strongly consistent connected-app digest over
+the optional native Gmail cron's KV result. The native cron therefore cannot
+overwrite connected-app results. This repo does not install an assistant
+schedule: the Gmail owner must configure and test the existing morning automation
+with this contract. Advance a last-success checkpoint **only after** all pages
+are fetched and every batch is acknowledged; on partial/failure retain it and
+retry with a 24-hour overlap. Deduplication makes this safe. Report failures and
+stale `checkedAt` values in delivery, never silently treat them as empty inboxes.
+
+External Gmail calls have 10-second attempt timeouts and at most one retry for
+network/429/5xx failures. AI has an 8-second deadline and deterministic redacted
+fallback. Input strings, dates, message identifiers and batch sizes are bounded.
+All errors returned/logged are generic; original upstream bodies are omitted.

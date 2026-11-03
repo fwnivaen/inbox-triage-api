@@ -1,3 +1,6 @@
+export { IngestionStore } from "./ingestion.js";
+import { ingest } from "./ingestion.js";
+import { isInboundEmail, MAX_BATCH, readJson } from "./validation.js";
 import { isAuthorized } from "./auth.js";
 import { buildDigest } from "./digest.js";
 import { GMAIL_ACCOUNTS, isGmailAccountKey } from "./gmail/accounts.js";
@@ -6,30 +9,19 @@ import { getLatestDigest } from "./gmail/retention.js";
 import { getConnectedAccounts } from "./gmail/tokenStore.js";
 import { classifyBatch, classifyEmail } from "./pipeline.js";
 import { runDailySync } from "./scheduled.js";
-import type { InboundEmail } from "./types.js";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
 }
 
-function isInboundEmail(value: unknown): value is InboundEmail {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.id === "string" &&
-    typeof v.fromAddress === "string" &&
-    typeof v.fromName === "string" &&
-    typeof v.subject === "string" &&
-    typeof v.body === "string" &&
-    typeof v.receivedAt === "string" &&
-    typeof v.hasAttachment === "boolean"
-  );
-}
-
 async function handle(request: Request, env: Env, url: URL): Promise<Response> {
+  if (url.pathname === "/ingest" && request.method === "POST") {
+    if (!isAuthorized(request, env)) return json({error:"Unauthorized"},401);
+    return ingest(await readJson(request),env);
+  }
   if (url.pathname === "/health") {
     return json({ ok: true });
   }
@@ -38,11 +30,11 @@ async function handle(request: Request, env: Env, url: URL): Promise<Response> {
     if (!isAuthorized(request, env)) {
       return json({ error: "Unauthorized" }, 401);
     }
-    const body = await request.json().catch(() => null);
+    const body = await readJson(request);
     if (isInboundEmail(body)) {
       return json(await classifyEmail(body, env));
     }
-    if (Array.isArray(body) && body.every(isInboundEmail)) {
+    if (Array.isArray(body) && body.length <= MAX_BATCH && body.every(isInboundEmail)) {
       return json(await classifyBatch(body, env));
     }
     return json({ error: "Expected an InboundEmail or InboundEmail[] body." }, 400);
@@ -52,8 +44,8 @@ async function handle(request: Request, env: Env, url: URL): Promise<Response> {
     if (!isAuthorized(request, env)) {
       return json({ error: "Unauthorized" }, 401);
     }
-    const body = await request.json().catch(() => null);
-    if (!Array.isArray(body) || !body.every(isInboundEmail)) {
+    const body = await readJson(request);
+    if (!Array.isArray(body) || body.length > MAX_BATCH || !body.every(isInboundEmail)) {
       return json({ error: "Expected an InboundEmail[] body." }, 400);
     }
     const classified = await classifyBatch(body, env);
@@ -85,15 +77,16 @@ async function handle(request: Request, env: Env, url: URL): Promise<Response> {
       const { account } = await completeOAuthCallback(env, code, state);
       return json({ ok: true, account, message: `${account} inbox connected (read-only).` });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(JSON.stringify({ message: "oauth callback failed", error: message }));
-      return json({ ok: false, error: message }, 400);
+      console.error(JSON.stringify({ message: "oauth callback failed", error: "Operation failed" }));
+      return json({ ok: false, error: "Operation failed" }, 400);
     }
   }
 
   if (url.pathname === "/digest/latest" && request.method === "GET") {
     if (!isAuthorized(request, env)) return json({ error: "Unauthorized" }, 401);
-    const [digest, connected] = await Promise.all([getLatestDigest(env), getConnectedAccounts(env, GMAIL_ACCOUNTS)]);
+    const [stored, connected] = await Promise.all([getLatestDigest(env), getConnectedAccounts(env, GMAIL_ACCOUNTS)]);
+    const ingested = env.INGESTION ? await (await env.INGESTION.get(env.INGESTION.idFromName("consolidated")).fetch("https://internal/latest")).json() : null;
+    const digest = ingested ?? stored;
     if (!digest) {
       return json({ digest: null, connectedAccounts: connected, message: "No digest has run yet." });
     }
@@ -112,13 +105,12 @@ async function handle(request: Request, env: Env, url: URL): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    console.log(JSON.stringify({ message: "incoming request", method: request.method, path: url.pathname }));
+
 
     try {
       return await handle(request, env, url);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(JSON.stringify({ message: "unhandled error", error: message, path: url.pathname }));
+      console.error(JSON.stringify({ message: "unhandled error", error: "Operation failed" }));
       return json({ error: "Internal server error" }, 500);
     }
   },
