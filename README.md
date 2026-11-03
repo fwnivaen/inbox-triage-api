@@ -409,3 +409,9 @@ as automated for reply detection. Concrete banking/security and card activation
 actions remain eligible for Actions. Card activation accepts described product
 names ending in "card", with bounded context after "your"/"the" plus an explicit
 "activate it" request; no payment brand exception is used.
+
+Product-discovery questions such as "Have you seen our new ...?" are promotional
+when the preview contains no explicit personal request. This decision does not
+rely on a retailer name, local part, or marketing subdomain. A real new request
+in the preview takes precedence; banking/security and activation actions retain
+their separate action checks. No new ingestion fields or raw headers are needed.

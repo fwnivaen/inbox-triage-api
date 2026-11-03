@@ -1,4 +1,4 @@
-import { latestText, BROADCAST, RESOLVED, hasDirectRequest, publicationNotice, FINANCIAL_RISK } from "./signals.js";
+import { latestText, BROADCAST, RESOLVED, hasDirectRequest, publicationNotice, marketingDiscovery, FINANCIAL_RISK } from "./signals.js";
 import { extractDeadline, hasDeadlineCue } from "./deadline.js";
 import { isAutomatedAddress, safePreview } from "./privacy.js";
 import type { InboundEmail, Label } from "./types.js";
@@ -121,7 +121,7 @@ export interface ClassificationResult {
 export function classifyLabel(email: InboundEmail, receivedAt: Date, ownAddresses: string[] = []): ClassificationResult {
   const preview = safePreview(latestText(email.body));
   const text = `${email.subject} ${preview}`;
-  const broadcast=isNewsletter(email,text) || BROADCAST.test(text) || publicationNotice(text);
+  const broadcast=isNewsletter(email,text) || BROADCAST.test(text) || publicationNotice(text) || marketingDiscovery(email.subject,preview);
   const self=ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase());
   const resolved=RESOLVED.test(preview) && !hasDirectRequest(preview);
   const social=matchesAny(domainOf(email.fromAddress),["linkedin.com","facebookmail.com","instagram.com","twitter.com","x.com"]);

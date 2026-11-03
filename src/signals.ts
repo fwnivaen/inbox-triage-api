@@ -38,3 +38,9 @@ export const ACCOUNT_ACTIVATION=/\bactivate (?:your|the) (?:replacement )?(?:(?:
 
 export const requiresCardActivation=(text:string):boolean=>ACCOUNT_ACTIVATION.test(text)
  || (/\b(?:your|the) (?:[a-z]+\s+){0,5}(?:[a-z]*card)\b/i.test(text) && /\bactivate it\b/i.test(text));
+
+/** Product-discovery questions advertise a collection; a new personal request
+ * in the preview takes precedence. Independent of sender/domain/brand spelling. */
+export const marketingDiscovery=(subject:string,preview:string):boolean=>
+ /\bhave you (?:seen|tried|discovered|explored|checked out|heard about)\b[^?!.]{0,80}\bour (?:new|latest)\b/i.test(subject)
+ && !hasDirectRequest(preview);
