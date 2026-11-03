@@ -1,3 +1,4 @@
+import { attentionMetadata, currentAttention } from "./attention.js";
 import { classifyLabel } from "./classifier.js";
 import { buildDigest } from "./digest.js";
 import { computePriority } from "./priority.js";
@@ -6,25 +7,26 @@ import { summarizeAndReply } from "./summarize.js";
 import type { ClassifiedEmail, InboundEmail } from "./types.js";
 
 /** Full per-email pipeline: label -> priority -> summary/reply (SPEC.md §3). */
-export async function classifyEmail(email: InboundEmail, env?: Env): Promise<ClassifiedEmail> {
+export async function classifyEmail(email: InboundEmail, env?: Env, now = new Date()): Promise<ClassifiedEmail> {
   const receivedAt = new Date(email.receivedAt);
   const preview = safePreview(email.body);
   const text = `${email.subject} ${preview}`;
 
   const { label, deadline } = classifyLabel(email, receivedAt);
-  const priority = computePriority(label, deadline, text, receivedAt);
+  const priority = computePriority(label, deadline, text, now);
   const { summary, suggested_reply } = await summarizeAndReply(env, email, label, preview);
 
-  return {
+  return currentAttention({
     id: email.id,
     label,
-    route: label === "Needs Reply" ? "Needs Reply" : /\b(meeting|interview|appointment|call)\b/i.test(text) && /\btoday\b/i.test(text) && receivedAt.toLocaleDateString("en-US", {timeZone:"America/New_York"}) === new Date().toLocaleDateString("en-US", {timeZone:"America/New_York"}) ? "Meetings Today" : deadline ? "Deadlines" : "Review",
+    ...attentionMetadata(text,receivedAt),
+    basePriority: computePriority(label,null,text,now),
     priority,
     summary,
     deadline,
     suggested_reply,
     has_attachment: email.hasAttachment,
-  };
+  },email.receivedAt,now);
 }
 
 export async function classifyBatch(emails: InboundEmail[], env?: Env): Promise<ClassifiedEmail[]> {

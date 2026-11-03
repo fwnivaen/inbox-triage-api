@@ -1,11 +1,11 @@
-import { expect,it } from 'vitest';
+import { expect,it,vi } from 'vitest';
 import worker from '../src/index.js';
 import { ingest,IngestionStore,excludeMessages } from '../src/ingestion.js';
 import { fakeKv } from './fakeKv.js';
 const email={id:'message-1',account:'work',fromAddress:'sam@example.com',fromName:'Sam Example',subject:'Please reply',body:'Can you confirm a meeting today?',receivedAt:new Date().toISOString(),hasAttachment:false};
 function setup(){
  const data=new Map<string,unknown>();
- const storage={setAlarm:async()=>{},get:async(k:string)=>data.get(k),put:async(k:string,v:unknown)=>{data.set(k,v);},delete:async(k:string)=>data.delete(k),list:async()=>new Map([...data].filter(([k])=>k.startsWith('message:'))),transaction:async(fn:(s:unknown)=>unknown)=>fn(storage)};
+ const storage={setAlarm:async()=>{},get:async(k:string)=>data.get(k),put:async(k:string,v:unknown)=>{data.set(k,v);},delete:async(k:string)=>data.delete(k),list:async(options:{startAfter?:string;limit?:number})=>new Map([...data].filter(([k])=>k.startsWith('message:') && (!options.startAfter || k>options.startAfter)).sort(([a],[b])=>a.localeCompare(b)).slice(0,options.limit ?? Infinity)),transaction:async(fn:(s:unknown)=>unknown)=>fn(storage)};
  const store=new IngestionStore({storage} as unknown as DurableObjectState);
  const env={DIGEST_API_KEY:'test',INBOX_KV:fakeKv(),INGESTION:{idFromName:()=>'',get:()=>({fetch:(url:string,init:RequestInit)=>store.fetch(new Request(url,init))})}} as unknown as Env;
  return {env,data};
@@ -33,4 +33,18 @@ it('suppresses outgoing records from digest and future replays without Gmail mut
  expect(suppressed.excluded).toBe(1);expect(suppressed.text).toBe('');
  const replay=await (await ingest({emails:[email],accounts},env)).json() as any;expect(replay.inserted).toBe(0);expect(replay.text).toBe('');
  expect((await excludeMessages({messages:[{account:'other',id:'x'}]},env)).status).toBe(400);
+});
+
+it('renders idle latest as-of now without refreshing coverage, and pages historical metadata',async()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-03T03:30:00Z'));
+ try {
+ const {env,data}=setup();
+ for(let i=0;i<150;i++) data.set(`message:work:old-${String(i).padStart(3,'0')}`,{email:{...email,id:`old-${i}`,account:'work',label:'Needs Reply',route:'Needs Reply',priority:'normal',summary:'Please confirm your availability.',deadline:null,suggested_reply:null,has_attachment:false},receivedAt:'2026-10-30T00:00:00Z'});
+ const mail={...email,id:'fresh',receivedAt:'2026-11-03T03:00:00Z'};
+ const first=await (await ingest({emails:[mail],accounts:{work:{status:'ok',count:1}}},env)).json() as any;
+ expect(first.text).toContain('work');
+ vi.setSystemTime(new Date('2026-11-04T04:00:00Z'));
+ const latest=await (await env.INGESTION.get(env.INGESTION.idFromName('consolidated')).fetch('https://internal/latest')).json() as any;
+ expect(latest.text).toBe('');expect(latest.accounts.work.checkedAt).toBe(first.accounts.work.checkedAt);expect(latest.generatedAt).toBe(first.generatedAt);expect(latest.renderedAt).not.toBe(first.renderedAt);
+ } finally {vi.useRealTimers();}
 });
