@@ -54,7 +54,7 @@ export function safePreview(body: string, maxChars = 500): string {
 
 /** True if the address is a no-reply/notifications/automated sender. */
 export function isAutomatedAddress(address: string): boolean {
-  return /^(no-?reply|notifications?|support|newsletter|digest|alerts?|updates?|bounce)[@._-]/i.test(
+  return /^(no-?reply|notifications?|support|offers?|deals?|marketing|promotions?|newsletter|digest|alerts?|updates?|bounce)[@._-]/i.test(
     address.trim(),
   );
 }

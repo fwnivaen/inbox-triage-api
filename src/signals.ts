@@ -37,4 +37,4 @@ export function routineOtp(text:string):boolean {
 export const ACCOUNT_ACTIVATION=/\bactivate (?:your|the) (?:replacement )?(?:(?:debit|credit) )?card\b/i;
 
 export const requiresCardActivation=(text:string):boolean=>ACCOUNT_ACTIVATION.test(text)
- || (/\b(?:your|the) (?:(?:new|replacement|debit|credit) )*card\b/i.test(text) && /\bactivate it\b/i.test(text));
+ || (/\b(?:your|the) (?:[a-z]+\s+){0,5}(?:[a-z]*card)\b/i.test(text) && /\bactivate it\b/i.test(text));
