@@ -1,3 +1,4 @@
+import { fetchRetry } from "../resilience.js";
 import { GMAIL_READONLY_SCOPE, type GmailAccountKey } from "./accounts.js";
 import { consumeOAuthState, createOAuthState, setRefreshToken } from "./tokenStore.js";
 
@@ -65,7 +66,7 @@ export async function completeOAuthCallback(env: Env, code: string, state: strin
   }
   const { clientId, clientSecret } = requireClientCredentials(env);
 
-  const response = await fetch(TOKEN_ENDPOINT, {
+  const response = await fetchRetry(TOKEN_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -88,7 +89,7 @@ export async function completeOAuthCallback(env: Env, code: string, state: strin
 
   const expected = JSON.parse(env.GMAIL_ACCOUNT_EMAILS ?? "{}") as Partial<Record<GmailAccountKey, string>>;
   if (!expected[account]) throw new Error("Expected Gmail account identity is not configured.");
-  const profile = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+  const profile = await fetchRetry("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
     headers: { authorization: `Bearer ${tokens.access_token}` },
   });
   if (!profile.ok) throw new Error(`Gmail identity verification failed: ${profile.status}`);
@@ -103,7 +104,7 @@ export async function completeOAuthCallback(env: Env, code: string, state: strin
 /** Exchanges a stored refresh token for a short-lived access token. */
 export async function refreshAccessToken(env: Env, refreshToken: string): Promise<string> {
   const { clientId, clientSecret } = requireClientCredentials(env);
-  const response = await fetch(TOKEN_ENDPOINT, {
+  const response = await fetchRetry(TOKEN_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({

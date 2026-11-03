@@ -18,7 +18,7 @@ const REDACTION_PLACEHOLDER_PATTERN = /\[redacted[a-z-]*\]/gi;
 
 /** Redact OTPs, tokens, SSNs, and account/card numbers from free text. */
 export function redactSensitive(text: string): string {
-  let out = text;
+  let out = text.replace(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9.-]*[A-Z0-9])?/gi, "[redacted-email]");
   for (const pattern of CREDENTIAL_PATTERNS) {
     out = out.replace(pattern, "[redacted]");
   }

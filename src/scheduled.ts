@@ -26,7 +26,7 @@ export async function runDailySync(env: Env): Promise<string> {
   return digest;
 }
 
-async function syncAccount(env: Env, account: GmailAccountKey, out: AccountClassifiedEmail[]): Promise<{ status: "ok" | "failed" | "not_connected"; count: number }> {
+async function syncAccount(env: Env, account: GmailAccountKey, out: AccountClassifiedEmail[]): Promise<{ status: "ok" | "partial" | "failed" | "not_connected"; count: number }> {
   const start = out.length;
   try {
     const refreshToken = await getRefreshToken(env, account);
@@ -34,7 +34,9 @@ async function syncAccount(env: Env, account: GmailAccountKey, out: AccountClass
     const accessToken = await refreshAccessToken(env, refreshToken);
     const ids = await listRecentMessageIds(accessToken, 24);
 
+    let failedMessages = 0;
     for (const id of ids) {
+      try {
       const email = await getMessageAsInboundEmail(accessToken, account, id);
       const classified = await classifyEmail(email, env);
       out.push({ ...classified, account });
@@ -47,13 +49,13 @@ async function syncAccount(env: Env, account: GmailAccountKey, out: AccountClass
         deadline: classified.deadline,
         summary: classified.summary,
       });
+      } catch { failedMessages++; }
     }
 
     console.log(JSON.stringify({ message: "gmail sync ok", account, count: ids.length }));
-    return { status: "ok", count: ids.length };
+    return { status: failedMessages ? (out.length > start ? "partial" : "failed") : "ok", count: out.length - start };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(JSON.stringify({ message: "gmail sync failed", account, error: message }));
+    console.error(JSON.stringify({ message: "gmail sync failed", account, error: "Upstream sync failed" }));
     return { status: "failed", count: out.length - start };
   }
 }

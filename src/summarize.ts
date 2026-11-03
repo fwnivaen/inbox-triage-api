@@ -1,3 +1,4 @@
+import { withTimeout } from "./resilience.js";
 import { firstNameOf, hasInformativeContent, redactSensitive } from "./privacy.js";
 import type { InboundEmail, Label } from "./types.js";
 
@@ -14,7 +15,7 @@ function firstSentence(text: string): string {
 
 /** No-AI fallback so the API still works in local `wrangler dev` without an AI binding. */
 export function heuristicSummary(email: InboundEmail, preview: string): string {
-  const subject = stripThreadPrefix(email.subject);
+  const subject = stripThreadPrefix(redactSensitive(email.subject));
   const body = firstSentence(redactSensitive(preview)).slice(0, 140);
   // If the first sentence was mostly a credential/OTP/account number, redaction
   // leaves a near-empty stub like "Your [redacted]." — that still has length,
@@ -73,17 +74,17 @@ export async function summarizeAndReply(
       `Preview: ${preview}`,
     ].join("\n");
 
-    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+    const result = await withTimeout(env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
       messages: [{ role: "user", content: prompt }],
-    });
+    }), 8000);
 
     const raw = typeof result === "string" ? result : (result as { response?: string }).response ?? "";
     const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
     const redactedSummary =
-      typeof parsed.summary === "string" && parsed.summary.trim() ? redactSensitive(parsed.summary) : "";
+      typeof parsed.summary === "string" && parsed.summary.trim() ? redactSensitive(parsed.summary).slice(0,400) : "";
     const redactedReply =
       typeof parsed.suggested_reply === "string" && parsed.suggested_reply.trim()
-        ? redactSensitive(parsed.suggested_reply)
+        ? redactSensitive(parsed.suggested_reply).slice(0,800)
         : "";
     return {
       // The model only ever sees the already-redacted preview, so it can echo
