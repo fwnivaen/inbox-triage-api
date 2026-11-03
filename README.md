@@ -322,3 +322,31 @@ It suppresses that derived record from the saved digest and future replays,
 then rebuilds the digest atomically. It never deletes or changes Gmail mail.
 The intake owner must filter SENT/DRAFT messages before ingestion; exclusion
 is a correction for an incorrectly scoped pull, not sender inference by AI.
+
+### Current-time attention contract
+
+Saved digest retrieval re-renders metadata as of the request's current time; it
+never trusts the cached text. `renderedAt` is the evaluation time. `generatedAt`
+and each account's `checkedAt` remain the last ingestion/coverage acknowledgement,
+so retrieval cannot make an idle or failed account appear freshly checked.
+Records older than 24 hours are omitted. Meetings carry a safe resolved calendar
+date in Eastern time, and are shown as Meetings Today only on that date. Active
+(deadline today or later) deadlines gain urgency against the current clock;
+past-date deadlines stop routing as Deadlines. Independent reply/account actions
+may remain actionable. Concrete Actions include incomplete applications, missing
+documents, failed payments and account-security steps. Routine school updates,
+job ads and other Review items are not attention items. Newsletters/promotions
+are suppressed even when their text contains a promotional deadline.
+
+Only safe booleans/date facts and baseline priority are added to stored metadata;
+original text remains transient. Legacy metadata is conservatively interpreted
+from its redacted summary until a replay upgrades safe temporal facts (the
+original classification summary and message identity remain unchanged). Explicit
+meeting dates/today/tomorrow are supported; vague meeting language requires review
+outside the attention digest, not an invented appointment date.
+
+Storage scans use pages of 128 records, capped at 512 pages and 5,000 current
+attention items. Capacity exhaustion returns a generic failure rather than a
+silently incomplete digest; callers must retain checkpoints and alert. This
+keeps allocations bounded as 90-day retention grows. Private responses include
+`Cache-Control: no-store` on ingestion, correction and retrieval paths.

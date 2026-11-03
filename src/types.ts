@@ -26,7 +26,10 @@ export interface InboundEmail {
 /** Per-email output shape (SPEC.md §3). Never includes a full email address. */
 export interface ClassifiedEmail {
   id: string;
-  route?: "Needs Reply" | "Meetings Today" | "Deadlines" | "Review";
+  meetingDate?: string | null;
+  actionRequired?: boolean;
+  basePriority?: Priority;
+  route?: "Needs Reply" | "Meetings Today" | "Deadlines" | "Actions" | "Review";
   label: Label;
   priority: Priority;
   summary: string;

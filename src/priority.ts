@@ -13,22 +13,22 @@ const FINANCIAL_AID_INFORMATIONAL =
   /\b(award letter is ready|disbursement confirmation|here(?:'|’)s your|statement is ready)\b/i;
 const RECEIPT_NEEDS_REVIEW = /\b(unexpected charge|failed payment|declined|dispute|unauthorized)\b/i;
 
-function hoursUntil(deadline: string | null, receivedAt: Date): number | null {
+function hoursUntil(deadline: string | null, now: Date): number | null {
   if (!deadline) return null;
   const deadlineDate = new Date(`${deadline}T23:59:59Z`);
-  return (deadlineDate.getTime() - receivedAt.getTime()) / 3_600_000;
+  return (deadlineDate.getTime() - now.getTime()) / 3_600_000;
 }
 
 export function computePriority(
   label: Label,
   deadline: string | null,
   text: string,
-  receivedAt: Date,
+  now: Date,
 ): Priority {
   if (label === "Newsletters" || label === "Spam/Promotions") return "low";
 
-  const hours = hoursUntil(deadline, receivedAt);
-  const deadlineIsUrgent = hours !== null && hours <= 48;
+  const hours = hoursUntil(deadline, now);
+  const deadlineIsUrgent = hours !== null && hours >= 0 && hours <= 48;
 
   if (deadlineIsUrgent) return "urgent";
   if (label === "Notifications/GitHub" && SECURITY_ALERT.test(text)) return "urgent";
