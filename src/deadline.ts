@@ -45,6 +45,8 @@ export function extractDeadline(text: string, receivedAt: Date): string | null {
   return parseDate(text,receivedAt);
 }
 function parseDate(text: string, receivedAt: Date): string | null {
+  const eastern=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(receivedAt);
+  const calendar=new Date(`${eastern}T12:00:00Z`);
   const lower = text.toLowerCase();
 
   // YYYY-MM-DD
@@ -58,7 +60,7 @@ function parseDate(text: string, receivedAt: Date): string | null {
   if (monthDay) {
     const mIdx = monthIndex(monthDay[1]);
     const day = parseInt(monthDay[2], 10);
-    let year = monthDay[3] ? parseInt(monthDay[3], 10) : receivedAt.getUTCFullYear();
+    let year = monthDay[3] ? parseInt(monthDay[3], 10) : calendar.getUTCFullYear();
     const candidate = new Date(Date.UTC(year, mIdx, day));
     // If no year given and the date already passed this year, assume next year.
     if (!monthDay[3] && candidate.getTime() < receivedAt.getTime() - 24 * 3600 * 1000) {
@@ -74,7 +76,7 @@ function parseDate(text: string, receivedAt: Date): string | null {
     const day = parseInt(slash[2], 10);
     let year = slash[3]
       ? parseInt(slash[3].length === 2 ? `20${slash[3]}` : slash[3], 10)
-      : receivedAt.getUTCFullYear();
+      : calendar.getUTCFullYear();
     const candidate = new Date(Date.UTC(year, month, day));
     if (!slash[3] && candidate.getTime() < receivedAt.getTime() - 24 * 3600 * 1000) {
       year += 1;
@@ -86,8 +88,8 @@ function parseDate(text: string, receivedAt: Date): string | null {
   const ordinalDay = lower.match(/\b(?:by|on)\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
   if (ordinalDay) {
     const day = parseInt(ordinalDay[1], 10);
-    let year = receivedAt.getUTCFullYear();
-    let month = receivedAt.getUTCMonth();
+    let year = calendar.getUTCFullYear();
+    let month = calendar.getUTCMonth();
     const candidate = new Date(Date.UTC(year, month, day));
     if (candidate.getTime() < receivedAt.getTime() - 24 * 3600 * 1000) {
       month += 1;
@@ -100,9 +102,9 @@ function parseDate(text: string, receivedAt: Date): string | null {
   }
 
   // "today" / "tomorrow"
-  if (/\btoday\b/.test(lower)) return toISODate(receivedAt);
+  if (/\btoday\b/.test(lower)) return toISODate(calendar);
   if (/\btomorrow\b/.test(lower)) {
-    const d = new Date(receivedAt);
+    const d = new Date(calendar);
     d.setUTCDate(d.getUTCDate() + 1);
     return toISODate(d);
   }
@@ -113,7 +115,7 @@ function parseDate(text: string, receivedAt: Date): string | null {
   );
   if (weekday) {
     const target = WEEKDAYS.indexOf(weekday[1]);
-    const d = new Date(receivedAt);
+    const d = new Date(calendar);
     const diff = (target - d.getUTCDay() + 7) % 7;
     d.setUTCDate(d.getUTCDate() + (diff === 0 ? 7 : diff));
     return toISODate(d);
@@ -121,7 +123,7 @@ function parseDate(text: string, receivedAt: Date): string | null {
 
   // "this week" -> end of the current week (Friday)
   if (/\bthis week\b/.test(lower)) {
-    const d = new Date(receivedAt);
+    const d = new Date(calendar);
     const diff = (5 - d.getUTCDay() + 7) % 7; // 5 = Friday
     d.setUTCDate(d.getUTCDate() + diff);
     return toISODate(d);
@@ -135,7 +137,7 @@ function parseDate(text: string, receivedAt: Date): string | null {
   }
   const inDays = lower.match(/\bin\s+(\d{1,3})\s+days?\b/);
   if (inDays) {
-    const d = new Date(receivedAt);
+    const d = new Date(calendar);
     d.setUTCDate(d.getUTCDate() + parseInt(inDays[1], 10));
     return toISODate(d);
   }
