@@ -17,10 +17,21 @@
       "id": "fabricated-sportswear-question",
       "subject": "Have You Seen Our New Sportswear Arrivals?",
       "body": "The perfect picks to power your performance"
+    },
+    {
+      "account": "personal",
+      "id": "fabricated-original-pattern",
+      "fromAddress": "news@example.com",
+      "fromName": "Example Fashion",
+      "subject": "Have You Seen Our New Sportswear Arrivals? \ud83d\udca5",
+      "body": "The perfect picks to power your performance \ud83d\udcaa \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c",
+      "receivedAt": "2026-11-02T05:08:21Z",
+      "hasAttachment": false
     }
   ],
   "expected": [
     "Actions",
+    "Review",
     "Review"
   ]
 }
