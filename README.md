@@ -386,3 +386,11 @@ codes with hypothetical security footers are suppressed, while observed new-sign
 security alerts remain actionable. Replacement-card activation is an explicit
 account action. Fabricated acceptance regressions cover each case plus positive
 security and document-deadline counterexamples.
+
+Email acceptance also covers person-display publications with browser-view
+footers, free-drink/exclusive-offer expiry, resolved approvals followed by a
+courtesy questions invitation, routine one-time authentication codes, explicit
+card activation, and human interview time requests. Courtesy invitations do not
+cancel a resolution; an explicit new request does. OTP notices stay in Review,
+while observed security changes and financial warnings remain Actions, even
+when authentication-code language is also present.
