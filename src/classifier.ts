@@ -1,4 +1,4 @@
-import { latestText, BROADCAST, RESOLVED, hasDirectRequest, publicationNotice, marketingDiscovery, FINANCIAL_RISK } from "./signals.js";
+import { latestText, BROADCAST, RESOLVED, hasDirectRequest, publicationNotice, marketingDiscovery, FINANCIAL_RISK, cardChange, jobPitch } from "./signals.js";
 import { extractDeadline, hasDeadlineCue } from "./deadline.js";
 import { isAutomatedAddress, safePreview } from "./privacy.js";
 import type { InboundEmail, Label } from "./types.js";
@@ -130,6 +130,8 @@ export function classifyLabel(email: InboundEmail, receivedAt: Date, ownAddresse
   if (self) return {label:"Notifications/GitHub",deadline:null};
   if (FINANCIAL_RISK.test(text)) return {label:/security alert|unrecognized|unauthorized|account (?:locked|suspended)|password (?:was )?changed|third.party app was added|recovery (?:email|phone).{0,20}changed|verify your identity/i.test(text) ? "Notifications/GitHub" : "Financial Aid",deadline};
 
+  if (cardChange(email.subject) || cardChange(preview)) return {label:"Notifications/GitHub",deadline:null};
+  if (jobPitch(text)) return {label:"Recruiter/Job",deadline:null};
   if (isNeedsReply(email, preview)) return { label: "Needs Reply", deadline };
   if (isRecruiterJob(email, text)) return { label: "Recruiter/Job", deadline };
   if (isSchool(email, text)) return { label: "School", deadline };

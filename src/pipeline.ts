@@ -1,4 +1,4 @@
-import { latestText, RESOLVED, hasDirectRequest, routineOtp } from "./signals.js";
+import { latestText, RESOLVED, hasDirectRequest, routineOtp, cardChange } from "./signals.js";
 import { attentionMetadata, currentAttention } from "./attention.js";
 import { classifyLabel } from "./classifier.js";
 import { buildDigest } from "./digest.js";
@@ -19,17 +19,20 @@ export async function classifyEmail(email: InboundEmail, env?: Env, now = new Da
   const priority = computePriority(label, deadline, text, now);
   const { summary, suggested_reply, summarySource } = await summarizeAndReply(env, email, label, preview);
 
+  const change=cardChange(email.subject) ?? cardChange(preview);
+  const self=ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase());
   return currentAttention({
     id: email.id,
     label,
     ...attentionMetadata(text,receivedAt),
-    attentionSuppressed: routineOtp(text) || ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase()) || (RESOLVED.test(preview) && !hasDirectRequest(preview)),
+    ...(change ? {actionRequired:true} : {}),
+    attentionSuppressed: self || (!change && (routineOtp(text) || (RESOLVED.test(preview) && !hasDirectRequest(preview)))),
     basePriority: computePriority(label,null,text,now),
     priority,
-    summary,
-    summarySource,
+    summary: change ? `A payment card was ${change}; if you did not make this change, review account security using the official app or website.` : summary,
+    summarySource: change ? "fallback" : summarySource,
     deadline,
-    suggested_reply,
+    suggested_reply: change ? null : suggested_reply,
     has_attachment: email.hasAttachment,
   },email.receivedAt,now);
 }

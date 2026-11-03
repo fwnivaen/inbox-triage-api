@@ -44,3 +44,15 @@ export const requiresCardActivation=(text:string):boolean=>ACCOUNT_ACTIVATION.te
 export const marketingDiscovery=(subject:string,preview:string):boolean=>
  /\bhave you (?:seen|tried|discovered|explored|checked out|heard about)\b[^?!.]{0,80}\bour (?:new|latest)\b/i.test(subject)
  && !hasDirectRequest(preview);
+
+/** Material card changes merit conditional review, not a reply or fraud assertion. */
+export function cardChange(text:string):'linked'|'unlinked'|null {
+ // A hypothetical "if a card was linked" footer is not an observed change.
+ // Keep the subject and actual notice, but stop before conditional advice.
+ const observed=text.split(/\bif (?:you|your|a|an|the|this)\b/i)[0];
+ const event=observed.match(/\bcard\b[^.!?\n]{0,60}?\b(unlinked|linked)\b/i);
+ return event ? event[1].toLowerCase() as 'linked'|'unlinked' : null;
+}
+export const jobPitch=(text:string):boolean=>/\b(?:campus ambassador|ambassador program|job|role|hiring|opportunity)\b/i.test(text)
+ && /\bdo you (?:love|enjoy)\b[^?]*\?/i.test(text)
+ && !hasDirectRequest(text.replace(/\bdo you (?:love|enjoy)\b[^?]*\?/gi,''));
