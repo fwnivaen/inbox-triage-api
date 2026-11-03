@@ -1,4 +1,4 @@
-import { latestText, BROADCAST, RESOLVED, hasDirectRequest, requestText, publicationNotice, FINANCIAL_RISK } from "./signals.js";
+import { latestText, BROADCAST, RESOLVED, hasDirectRequest, publicationNotice, FINANCIAL_RISK } from "./signals.js";
 import { extractDeadline, hasDeadlineCue } from "./deadline.js";
 import { isAutomatedAddress, safePreview } from "./privacy.js";
 import type { InboundEmail, Label } from "./types.js";
@@ -53,7 +53,7 @@ function isNeedsReply(email: InboundEmail, preview: string): boolean {
   if (RESOLVED.test(preview) && !hasDirectRequest(preview)) return false;
   if (isAutomatedAddress(email.fromAddress)) return false;
   if (!looksLikePerson(email.fromName)) return false;
-  return hasDirectRequest(email.subject) || /\?/.test(requestText(preview)) || hasDirectRequest(preview);
+  return hasDirectRequest(email.subject) || hasDirectRequest(preview);
 }
 
 function isRecruiterJob(email: InboundEmail, text: string): boolean {
