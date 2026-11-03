@@ -43,17 +43,17 @@ function isSchoolDomain(domain: string): boolean {
 function looksLikePerson(fromName: string): boolean {
   const name = fromName.trim();
   if (!name) return false;
-  if (/\b(team|support|notifications?|no-?reply|careers|recruiting|hr|hiring|billing|office|department|admissions|services|updates?|digest|newsletter)\b/i.test(name)) {
+  if (/\b(calendar|team|support|notifications?|no-?reply|careers|recruiting|hr|hiring|billing|office|department|admissions|services|updates?|digest|newsletter)\b/i.test(name)) {
     return false;
   }
-  return /^[A-Za-z][A-Za-z.'-]*(\s+[A-Za-z][A-Za-z.'-]*)+$/.test(name);
+  return /^[A-Za-z][A-Za-z.'-]*(\s+[A-Za-z][A-Za-z.'-]*)*$/.test(name);
 }
 
 function isNeedsReply(email: InboundEmail, preview: string): boolean {
   if (RESOLVED.test(preview) && !DIRECT_REQUEST.test(preview)) return false;
   if (isAutomatedAddress(email.fromAddress)) return false;
   if (!looksLikePerson(email.fromName)) return false;
-  return /\?/.test(email.subject) || DIRECT_REQUEST.test(email.subject) || /\?/.test(preview) || DIRECT_REQUEST.test(preview);
+  return DIRECT_REQUEST.test(email.subject) || /\?/.test(preview) || DIRECT_REQUEST.test(preview);
 }
 
 function isRecruiterJob(email: InboundEmail, text: string): boolean {

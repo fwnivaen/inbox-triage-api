@@ -1,4 +1,4 @@
-import { FINANCIAL_RISK } from "./signals.js";
+import { FINANCIAL_RISK, ACCOUNT_ACTIVATION } from "./signals.js";
 import { extractDeadline } from './deadline.js';
 import { computePriority } from './priority.js';
 import type { ClassifiedEmail } from './types.js';
@@ -12,7 +12,7 @@ export function attentionMetadata(text:string,receivedAt:Date) {
   else if(/\btomorrow\b/i.test(text)) meetingDate=easternDate(new Date(receivedAt.getTime()+86400000));
   else if(/\b\d{4}-\d{2}-\d{2}\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d/i.test(text)) meetingDate=extractDeadline(text,receivedAt);
  }
- return {meetingDate,actionRequired:ACTION.test(text) || FINANCIAL_RISK.test(text) || /\b(?:support (?:case|request)|case (?:open|pending)|ticket|financial (?:aid|support).{0,30}(?:review|required|pending))\b/i.test(text)};
+ return {meetingDate,actionRequired:ACCOUNT_ACTIVATION.test(text) || ACTION.test(text) || FINANCIAL_RISK.test(text) || /\b(?:support (?:case|request)|case (?:open|pending)|ticket|financial (?:aid|support).{0,30}(?:review|required|pending))\b/i.test(text)};
 }
 /** Re-evaluate stored safe facts without retaining original mail or invoking AI. */
 export function currentAttention(email:ClassifiedEmail,receivedAt:string,now:Date):ClassifiedEmail {
@@ -26,5 +26,5 @@ export function currentAttention(email:ClassifiedEmail,receivedAt:string,now:Dat
  const route= !routine && meetingDate===today ? 'Meetings Today' : email.label==='Needs Reply' ? 'Needs Reply' : !routine && activeDeadline ? 'Deadlines' : action ? 'Actions' : 'Review';
  const baseline=email.basePriority ?? computePriority(email.label,null,email.summary,now);
  const duePriority=computePriority(email.label,activeDeadline,'',now);
- return {...email,route,priority:route==='Meetings Today'||(activeDeadline && duePriority==='urgent') ? 'urgent' : baseline};
+ return {...email,route,priority:route==='Meetings Today'||(activeDeadline && duePriority==='urgent') ? 'urgent' : route==='Actions' && baseline==='low' ? 'normal' : baseline};
 }
