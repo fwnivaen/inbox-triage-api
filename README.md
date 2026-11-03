@@ -284,7 +284,10 @@ Coverage is evidence from the caller, not independently verified by the Worker.
 
 Run `python3 scripts/ingest.py` with JSON on stdin. The client reads the designated
 key file, sets a non-default User-Agent, retries transient HTTP failures, and
-prints counts only. Add `--show-digest` for delivery to the owner. Never put the
+prints counts only. Add `--show-digest` for delivery to the owner. Its importable
+`request('/digest/latest', include_cache_control=True)` returns
+`(status, body, cache_control)` so delivery can verify the private response's
+`no-store` header; ordinary callers still receive `(status, body)`. Never put the
 key in command arguments or commit real input files. On November 2 the default
 Python urllib User-Agent received Cloudflare **1010 / HTTP 403** even for public
 health; the same request with `InboxTriage/1.0` succeeds. This is an edge client
