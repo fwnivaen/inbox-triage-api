@@ -28,3 +28,8 @@ it('keeps below-zero banking, security, and student finance support actions visi
  expect((await classify({body:'Your account is overdrawn.'})).priority).toBe('urgent');
 });
 it('reports fallback provenance explicitly',async()=>expect((await classify({body:'Please confirm your availability.'})).summarySource).toBe('fallback'));
+
+it('interprets tomorrow by Eastern arrival day after UTC midnight',async()=>{
+ const r=await classify({subject:'Assignment',body:'Your assignment is due tomorrow.',receivedAt:'2026-11-03T03:00:00Z'});
+ expect(r.deadline).toBe('2026-11-03');
+});
