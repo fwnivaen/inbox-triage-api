@@ -1,6 +1,6 @@
 import { expect,it } from 'vitest';
 import worker from '../src/index.js';
-import { ingest,IngestionStore } from '../src/ingestion.js';
+import { ingest,IngestionStore,excludeMessages } from '../src/ingestion.js';
 import { fakeKv } from './fakeKv.js';
 const email={id:'message-1',account:'work',fromAddress:'sam@example.com',fromName:'Sam Example',subject:'Please reply',body:'Can you confirm a meeting today?',receivedAt:new Date().toISOString(),hasAttachment:false};
 function setup(){
@@ -25,3 +25,12 @@ it('persists unique message identities across replays and retains different repl
  expect(JSON.stringify([...data.values()])).not.toContain('sam@example.com');
 });
 it('records all-empty coverage without implying failure',async()=>{const {env}=setup();const r=await (await ingest({emails:[],accounts:{work:{status:'ok',count:0},personal:{status:'failed',count:0},school:{status:'partial',count:0}}},env)).json() as any;expect(r.text).toBe('');expect(r.accounts.work.status).toBe('ok');expect(r.accounts.personal.status).toBe('failed');});
+
+it('suppresses outgoing records from digest and future replays without Gmail mutation',async()=>{
+ const {env}=setup();const accounts={work:{status:'ok',count:1}};
+ const first=await (await ingest({emails:[email],accounts},env)).json() as any;expect(first.text).toContain('work');
+ const suppressed=await (await excludeMessages({messages:[{account:'work',id:email.id}]},env)).json() as any;
+ expect(suppressed.excluded).toBe(1);expect(suppressed.text).toBe('');
+ const replay=await (await ingest({emails:[email],accounts},env)).json() as any;expect(replay.inserted).toBe(0);expect(replay.text).toBe('');
+ expect((await excludeMessages({messages:[{account:'other',id:'x'}]},env)).status).toBe(400);
+});

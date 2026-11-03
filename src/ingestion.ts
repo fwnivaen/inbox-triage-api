@@ -16,25 +16,26 @@ export class IngestionStore {
  }
  async fetch(request:Request):Promise<Response> {
   if(request.method === "GET") return Response.json(await this.state.storage.get("latest") ?? null);
-  const input=await request.json() as {entries:Entry[];accounts:Partial<Record<GmailAccountKey,Coverage>>};
+  const input=await request.json() as {entries:Entry[];accounts:Partial<Record<GmailAccountKey,Coverage>>;exclude?:{account:GmailAccountKey;id:string}[]};
   await this.state.storage.setAlarm(Date.now()+86400000);
   const result=await this.state.storage.transaction(async storage=>{
    let inserted=0;
+   for(const message of input.exclude ?? []) await storage.put(`excluded:${message.account}:${message.id}`,true);
    for(const entry of input.entries) {
     const key=`message:${entry.email.account}:${entry.email.id}`;
-    if(!await storage.get(key)) {await storage.put(key,entry);inserted++;}
+    if(!await storage.get(`excluded:${entry.email.account}:${entry.email.id}`) && !await storage.get(key)) {await storage.put(key,entry);inserted++;}
    }
    const all=await storage.list<Entry>({prefix:'message:'});
    const cutoff=Date.now()-24*60*60*1000;
    const entries:AccountClassifiedEmail[]=[];
    for(const [key,entry] of all) {
     if(Date.parse(entry.receivedAt)<Date.now()-90*86400000) await storage.delete(key);
-    else if(Date.parse(entry.receivedAt)>=cutoff) entries.push(entry.email);
+    else if(Date.parse(entry.receivedAt)>=cutoff && !await storage.get(`excluded:${entry.email.account}:${entry.email.id}`)) entries.push(entry.email);
    }
    const previous=await storage.get<Partial<Record<GmailAccountKey,Coverage>>>('coverage') ?? {};
    const accounts={...previous};
    for(const [account,coverage] of Object.entries(input.accounts)) accounts[account as GmailAccountKey]={...coverage,checkedAt:new Date().toISOString()};
-   const result={generatedAt:new Date().toISOString(),source:'connected-app',text:buildMultiAccountDigest(entries.filter(e => (e.route === "Meetings Today" || e.deadline !== null) || !["Newsletters","Receipts","Spam/Promotions","Notifications/GitHub"].includes(e.label))),accounts,inserted,duplicates:input.entries.length-inserted,windowHours:24};
+   const result={generatedAt:new Date().toISOString(),source:'connected-app',text:buildMultiAccountDigest(entries.filter(e => (e.route === "Meetings Today" || e.deadline !== null) || !["Newsletters","Receipts","Spam/Promotions","Notifications/GitHub"].includes(e.label))),accounts,inserted,duplicates:input.entries.length-inserted,windowHours:24,excluded:input.exclude?.length ?? 0};
    await storage.put('coverage',accounts);await storage.put('latest',result);return result;
   });
   return Response.json(result);
@@ -58,4 +59,11 @@ export async function ingest(body:unknown,env:Env):Promise<Response> {
  const result=await response.json() as Record<string,unknown>;
 
  return Response.json({...result,batchDuplicates:emails.length-unique.size,missingAccounts:GMAIL_ACCOUNTS.filter(a=>!Object.prototype.hasOwnProperty.call(accounts,a))});
+}
+
+/** Reversible suppression of wrongly ingested outgoing metadata; never mutates Gmail. */
+export async function excludeMessages(body:unknown,env:Env):Promise<Response> {
+ const messages=(body as {messages?:unknown})?.messages;
+ if(!Array.isArray(messages)||messages.length>MAX_BATCH||messages.some(m=>!m||!isGmailAccountKey(m.account)||typeof m.id!=="string"||!/^[a-zA-Z0-9:_-]{1,200}$/.test(m.id))) return Response.json({error:"Invalid exclusion list"},{status:400});
+ return env.INGESTION.get(env.INGESTION.idFromName("consolidated")).fetch("https://internal/exclude",{method:"POST",body:JSON.stringify({entries:[],accounts:{},exclude:messages})});
 }

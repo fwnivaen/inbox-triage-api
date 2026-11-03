@@ -315,3 +315,10 @@ External Gmail calls have 10-second attempt timeouts and at most one retry for
 network/429/5xx failures. AI has an 8-second deadline and deterministic redacted
 fallback. Input strings, dates, message identifiers and batch sizes are bounded.
 All errors returned/logged are generic; original upstream bodies are omitted.
+
+If an outgoing message was accidentally ingested, authenticated
+`POST /ingest/exclude` accepts `{"messages":[{"account":"work","id":"message-id"}]}`.
+It suppresses that derived record from the saved digest and future replays,
+then rebuilds the digest atomically. It never deletes or changes Gmail mail.
+The intake owner must filter SENT/DRAFT messages before ingestion; exclusion
+is a correction for an incorrectly scoped pull, not sender inference by AI.
