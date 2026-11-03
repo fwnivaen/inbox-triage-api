@@ -1,6 +1,6 @@
 # Smart Inbox Triage API — Spec
 
-Built on Cloudflare Workers AI. Processes mail across three inboxes (school, work, personal) and classifies each incoming message into one label + one priority, with a structured summary and, where useful, a suggested reply. Also assembles a daily digest.
+Built on Cloudflare Workers, with optional Workers AI summaries and a deterministic fallback. Processes mail across three inboxes (school, work, personal) and classifies each incoming message into one label + one priority, with a structured summary and, where useful, a suggested reply. Also assembles a daily digest.
 
 Examples below are anonymized (fabricated names, companies, and amounts) — no real addresses or personal content.
 

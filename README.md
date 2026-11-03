@@ -2,8 +2,8 @@
 
 Classifies incoming email into one of nine labels + a priority tier, drafts
 a short summary (and, where useful, a reply you can review before sending),
-and assembles a daily digest. Built on **Cloudflare Workers + Workers AI**,
-in TypeScript.
+and assembles a daily digest. Built in TypeScript on **Cloudflare Workers**,
+with optional Workers AI summaries.
 
 Full behavior spec — labels, priority rules, output shape, digest format,
 and privacy rules — lives in [`SPEC.md`](./SPEC.md). This README covers how
@@ -20,8 +20,9 @@ to run, test, and deploy the implementation.
   ([`src/summarize.ts`](./src/summarize.ts)), via `@cf/meta/llama-3.1-8b-instruct`.
   It only ever sees the redacted ~500-character preview, never the full body.
   If no `AI` binding is available (e.g. local dev without a Cloudflare
-  account, or a model call fails), it falls back to a deterministic
-  heuristic summary/reply so the API still works end-to-end.
+  account), a model call fails, or its response is unusable, it falls back
+  to a deterministic heuristic summary/reply. `/classify` reports the actual
+  summary path through `summarySource`; HTTP 200 alone does not prove AI use.
 - **Privacy rules** ([`src/privacy.ts`](./src/privacy.ts)) redact OTPs,
   tokens, SSNs, and account/card numbers before anything is classified,
   summarized, or returned, and ensure full email addresses never appear in
@@ -64,13 +65,12 @@ npm run dev        # wrangler dev — requires `npx wrangler login` once,
 
 ## API
 
-### Agent-fed mode (primary usage)
+### Stateless classification mode
 
-`/classify` and `/digest` are the primary way this API is used in practice:
-an assistant with its own mail access (reading sir's real inboxes) POSTs
-batches of mail here to get them classified and digested, instead of this
-Worker pulling mail itself. Both routes require a bearer token — the Worker
-secret `DIGEST_API_KEY` — so only an authorized caller can feed it real mail.
+`/classify` and `/digest` classify a batch without persisting it. Production
+connected Gmail intake uses `/ingest` and `/digest/latest` below. An assistant
+with mail access can POST batches to either mode. All private routes require
+the Worker secret `DIGEST_API_KEY` as a bearer token.
 
 ```bash
 curl -s https://inbox-triage-api.inbox-triage-api.workers.dev/digest \
@@ -255,7 +255,7 @@ never place the API key in a URL. Only then run authenticated `POST /sync` and
 verify three `ok` account results plus a real redacted digest. Cron is currently
 13:00 UTC daily (8 AM Eastern standard time / 9 AM Eastern daylight time), and
 stores results for authenticated retrieval; it does not deliver email or chat.
-The separate 7:30 AM Eastern assistant automation handles chat delivery.
+Assistant chat delivery is configured separately from the Worker cron.
 
 OAuth state lives in eventually consistent Workers KV; it is not an atomic
 replay lock. Avoid concurrent callback retries. Large inboxes may exceed Worker
@@ -305,8 +305,10 @@ Suggested replies are drafts only; no email mutation occurs.
 `GET /digest/latest` prefers the strongly consistent connected-app digest over
 the optional native Gmail cron's KV result. The native cron therefore cannot
 overwrite connected-app results. This repo does not install an assistant
-schedule: the Gmail owner must configure and test the existing morning automation
-with this contract. Advance a last-success checkpoint **only after** all pages
+schedule. The assistant's 8:00 AM Eastern report uses this contract. As of
+November 3, 2026, a separate 7:30 AM Email digest is still enabled and must
+be consolidated to avoid duplicate morning reports. Advance a last-success
+checkpoint **only after** all pages
 are fetched and every batch is acknowledged; on partial/failure retain it and
 retry with a 24-hour overlap. Deduplication makes this safe. Report failures and
 stale `checkedAt` values in delivery, never silently treat them as empty inboxes.
@@ -372,6 +374,13 @@ original redacted metadata for the IDs needing correction.
 
 `/classify` outputs `summarySource: "ai" | "fallback"`; this describes summary
 generation only. Labels, deadlines, priorities and routes remain deterministic.
+The saved `/digest/latest` text does not expose per-message summary provenance;
+its HTTP status, `source: "connected-app"`, and fresh `renderedAt` are not
+evidence that AI generated summaries. Email's November 2–3 real-mail quality
+check recorded 136 summary outputs, all reporting `fallback`. A fabricated live
+`/classify` check on November 3 also returned `fallback`. Real Gmail metadata
+and stored routing were checked, but a genuinely empty source inbox and a live
+provider outage remain unobserved; those paths have synthetic/local tests.
 Quoted history does not supply new requests/deadlines. Broadcast questions and
 promotional expiry do not become personal reply tasks; financial/security
 warnings and concrete support requests remain visible as Actions. An approval
