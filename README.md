@@ -17,7 +17,9 @@ to run, test, and deploy the implementation.
   SPEC.md §1–2. This keeps classification fast, free, and fully testable
   without any model calls.
 - **Workers AI is used only for `summary` and `suggested_reply`**
-  ([`src/summarize.ts`](./src/summarize.ts)), via `@cf/meta/llama-3.1-8b-instruct`.
+  ([`src/summarize.ts`](./src/summarize.ts)), via `@cf/meta/llama-3.1-8b-instruct-fp8`.
+  JSON object mode with an explicit schema constrains generation; the raw binding
+  response is decoded as JSON and must contain an informative redacted summary.
   It only ever sees the redacted ~500-character preview, never the full body.
   If no `AI` binding is available (e.g. local dev without a Cloudflare
   account), a model call fails, or its response is unusable, it falls back
@@ -381,9 +383,17 @@ The saved `/digest/latest` text does not expose per-message summary provenance;
 its HTTP status, `source: "connected-app"`, and fresh `renderedAt` are not
 evidence that AI generated summaries. Email's November 2–3 real-mail quality
 check recorded 136 summary outputs, all reporting `fallback`. A fabricated live
-`/classify` check on November 3 also returned `fallback`. Real Gmail metadata
-and stored routing were checked, but a genuinely empty source inbox and a live
-provider outage remain unobserved; those paths have synthetic/local tests.
+`/classify` check on November 3 initially also returned `fallback`. The summarizer
+now uses the catalog-supported FP8 variant, JSON object mode/schema, and raw
+binding response decoding instead of relying on text-only postprocessing.
+A fresh fabricated, stateless deployed `/classify` on November 3 returned
+`summarySource: "ai"` with an informative summary in 3.64 seconds. This verifies
+the Worker path; direct model inference alone does not. No stored records were
+repaired for this check. Fallback diagnostics contain only fixed enums and numeric
+status/provider-code fields, never prompts, provider error text or email content.
+Real Gmail metadata and stored routing were checked separately, but a genuinely
+empty source inbox and a live provider outage remain unobserved; those paths
+have synthetic/local tests.
 Quoted history does not supply new requests/deadlines. Broadcast questions and
 promotional expiry do not become personal reply tasks; financial/security
 warnings and concrete support requests remain visible as Actions. An approval
