@@ -7,11 +7,11 @@ export function latestText(body:string):string {
   }
   return ({apos:"'",quot:'"',amp:'&',lt:'<',gt:'>',nbsp:' ',rsquo:"'",lsquo:"'"} as Record<string,string>)[name.toLowerCase()] ?? entity;
  });
- return decoded.split(/\b(?:Earlier message|Previous message|Quoted message):/i)[0].split(/\n(?:On .+wrote:|[- ]*Original Message[- ]*|From:)/i)[0].split('\n').filter(line=>!/^\s*>/.test(line)).join('\n');
+ return decoded.split(/\b(?:Earlier message|Previous message|Quoted message):|[-–—]{2,}\s*Forwarded message\s*[-–—]{2,}|\bBegin forwarded message:/i)[0].split(/\n(?:On .+wrote:|[- ]*Original Message[- ]*|From:)/i)[0].split('\n').filter(line=>!/^\s*>/.test(line)).join('\n');
 }
 export const FINANCIAL_RISK=/\b(negative balance|below[- ]zero|balance (?:is |has (?:fallen|dropped) )?below|overdrawn|overdraft|insufficient funds|payment (?:failed|declined)|failed payment|unauthorized|unrecognized|security alert|account (?:locked|suspended)|password (?:was )?changed|third.party app was added|recovery (?:email|phone).{0,20}changed|verify your identity)\b/i;
 export const RESOLVED=/\b(already approved|has been approved|is approved|approved your|no (?:further )?action (?:is )?(?:needed|required)|no (?:need to )?reply|resolved|recheck later|check (?:back |again )?later)\b/i;
-export const BROADCAST=/\b(newsletter|exclusive offer|free drink|subscriber edition|complimentary (?:[a-z]+ )?trial|special introductory access|unsubscribe|weekly digest|daily digest|news roundup|puzzle|crossword|coupon|promo code|discount code|limited.time offer|\d+% off)\b/i;
+export const BROADCAST=/\b(newsletter|exclusive offer|free drink|(?:free|complimentary) (?:\d+[- ]day )?guest pass|subscriber edition|complimentary (?:[a-z]+ )?trial|special introductory access|unsubscribe|weekly digest|daily digest|news roundup|puzzle|crossword|coupon|promo code|discount code|limited.time offer|\d+% off)\b/i;
 export const DIRECT_REQUEST=/\b(can you|could you|would you|please (?:confirm|respond|reply|send|share|provide|upload|complete)|let me know|need your availability)\b/i;
 
 /** OTP footers describe a hypothetical incident, not an observed security event. */
@@ -26,8 +26,21 @@ export function requestText(text:string):string {
 export const hasDirectRequest=(text:string):boolean=>{
  const clean=requestText(text);
  return DIRECT_REQUEST.test(clean) || /\b(?:are|will|do|did|have) you\b[^?]*\?/i.test(clean)
-  || /\b(?:what|which|when|how|where)\b[^?.!]{0,80}\b(?:you|your)\b[^?.!]*\?/i.test(clean);
+  || /\b(?:what|which|when|how|where)\b[^?.!]{0,80}\b(?:you|your)\b[^?.!]*\?/i.test(clean)
+  || (/\b(?:I|we)\b[^.!?]{0,40}\b(?:want(?:ed)?|like|need)\b[^.!?]{0,60}\b(?:know|hear|see|confirm)\b[^.!?]{0,40}\b(?:your|what|which|when)\b/i.test(clean)
+   && !/\b(?:let(?:ting)? (?:you|everyone) know|you (?:all )?to know)\b/i.test(clean));
 };
+/** Human correspondence can request a response without spelling out "you" or
+ * reaching the eventual scheduling question inside the bounded snippet. */
+export function hasReplyRequest(subject:string,preview:string):boolean {
+ return hasDirectRequest(subject) || hasCurrentReplyRequest(subject,preview);
+}
+/** A resolved reply must contain a new request; an old subject cannot reopen it. */
+export function hasCurrentReplyRequest(subject:string,preview:string):boolean {
+ return hasDirectRequest(preview)
+  || (/^\s*(?:fw|fwd):/i.test(subject) && /^\s*(?:hi\b[^.!?]{0,30}[,.!]\s*)?what\b[^?!.]{0,40}\bthis\b[^?!.]{0,20}\?/i.test(preview))
+  || /\binvit(?:e|ed|ing) you\b[^.!?]{0,100}\binterview\b/i.test(preview);
+}
 /** Browser chrome is a publication signal only when no personal request remains. */
 export const publicationNotice=(text:string):boolean=>/\bview (?:this email )?in (?:your )?browser\b/i.test(text) && !hasDirectRequest(text);
 export function routineOtp(text:string):boolean {
@@ -55,6 +68,14 @@ export function cardChange(text:string):'linked'|'unlinked'|'added'|null {
  // A completed payment-card addition to the recipient's account/wallet is
  // an account event. Offers, future additions and cart/catalog items are not.
  return /\b(?:payment|credit|debit) card (?:was|has been) added to your (?:account|wallet)\b/i.test(observed) ? 'added' : null;
+}
+/** Observed recipient-account events merit conditional review, not an assertion
+ * of compromise. Suggestions and hypothetical footer language are insufficient. */
+export function accountSecurityEvent(text:string):'payment-method'|'application'|null {
+ const observed=text.split(/\bif (?:you|your|a|an|any|the|this)\b/i)[0];
+ if(/\bpayment method (?:was|has been) added to your (?:account|wallet)\b/i.test(observed)) return 'payment-method';
+ if(/\bthird.party (?:[a-z0-9'-]+\s+){0,5}(?:app|application) (?:was|has been) added to your account\b/i.test(observed)) return 'application';
+ return null;
 }
 export const jobPitch=(text:string):boolean=>/\b(?:campus ambassador|ambassador program|job|role|hiring|opportunity)\b/i.test(text)
  && /\bdo you (?:love|enjoy)\b[^?]*\?/i.test(text)

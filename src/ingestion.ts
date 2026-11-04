@@ -47,7 +47,22 @@ export class IngestionStore {
    });
    return privateJson(result);
   }
-  const input=await request.json() as {entries:Entry[];accounts:Partial<Record<GmailAccountKey,Coverage>>;exclude?:{account:GmailAccountKey;id:string}[]};
+  const input=await request.json() as {entries:Entry[];accounts:Partial<Record<GmailAccountKey,Coverage>>;exclude?:{account:GmailAccountKey;id:string}[];messages?:{account:GmailAccountKey;id:string}[]};
+  if(new URL(request.url).pathname==='/inspect') {
+   const now=new Date();
+   const messages=await this.state.storage.transaction(async storage=>Promise.all(input.messages!.map(async ({account,id})=>{
+    const entry=await storage.get<Entry>(`message:${account}:${id}`);
+    const excluded=Boolean(await storage.get(`excluded:${account}:${id}`));
+    if(!entry) return {account,id,found:false,excluded,selection:'missing'};
+    const email=entry.email;
+    const current=currentAttention(email,entry.receivedAt,now);
+    const withinWindow=Date.parse(entry.receivedAt)>=now.getTime()-86400000;
+    const selection=excluded ? 'excluded' : !withinWindow ? 'outside-window' : current.route==='Review' ? 'review' : current.label==='Newsletters' ? 'newsletter' : 'included';
+    // Deliberately omit summaries/replies: diagnosis needs stored facts, not mail content.
+    return {account,id,found:true,excluded,receivedAt:entry.receivedAt,withinWindow,selection,label:email.label,storedRoute:email.route,currentRoute:current.route,deadline:email.deadline,meetingDate:email.meetingDate,actionRequired:email.actionRequired,attentionSuppressed:email.attentionSuppressed,basePriority:email.basePriority,priority:current.priority,summarySource:email.summarySource};
+   })));
+   return privateJson({source:'connected-app',renderedAt:now.toISOString(),messages});
+  }
   if(new URL(request.url).pathname==='/repair') {
    const result=await this.state.storage.transaction(async storage=>{
     for(const entry of input.entries) {
@@ -114,6 +129,14 @@ export async function excludeMessages(body:unknown,env:Env):Promise<Response> {
  const messages=(body as {messages?:unknown})?.messages;
  if(!Array.isArray(messages)||messages.length>MAX_BATCH||messages.some(m=>!m||!isGmailAccountKey(m.account)||typeof m.id!=="string"||!/^[a-zA-Z0-9:_-]{1,200}$/.test(m.id))) return privateJson({error:"Invalid exclusion list"},400);
  return env.INGESTION.get(env.INGESTION.idFromName("consolidated")).fetch("https://internal/exclude",{method:"POST",body:JSON.stringify({entries:[],accounts:{},exclude:messages})});
+}
+
+/** Bounded, read-only diagnosis of existing derived facts; never returns mail text. */
+export async function inspectMessages(body:unknown,env:Env):Promise<Response> {
+ const messages=(body as {messages?:unknown})?.messages;
+ if(!Array.isArray(messages)||!messages.length||messages.length>MAX_BATCH||messages.some(m=>!m||!isGmailAccountKey(m.account)||typeof m.id!=="string"||!/^[a-zA-Z0-9:_-]{1,200}$/.test(m.id))) return privateJson({error:"Invalid inspection list"},400);
+ const unique=[...new Map(messages.map(m=>[`${m.account}:${m.id}`,{account:m.account,id:m.id}])).values()];
+ return env.INGESTION.get(env.INGESTION.idFromName("consolidated")).fetch("https://internal/inspect",{method:"POST",body:JSON.stringify({messages:unique})});
 }
 
 /** Explicit existing-only repair. Does not advance intake coverage or insert messages. */

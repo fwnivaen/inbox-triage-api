@@ -360,6 +360,15 @@ keeps allocations bounded as 90-day retention grows. Private responses include
 
 ### Correcting previously classified messages
 
+For a specific suspected omission, authenticated `POST /ingest/inspect` accepts
+`{"messages":[{"account":"work","id":"message-id"}]}` (1–100 references,
+below 1 MB). It reads only those existing account/message keys and returns the
+stored receipt time, safe classification/attention flags, exclusion status,
+and current selection reason (`included`, `review`, `newsletter`, `excluded`,
+`outside-window`, or `missing`). It returns no summary, reply or original mail
+content and changes no storage, coverage or checkpoints. Use it to distinguish
+a classification defect from natural rolling-window expiry before repairing.
+
 `POST /ingest/repair` requires the same bearer credential as ingestion. Supply
 `{"emails": [InboundEmail + {"account":"work|personal|school"}]}` with at most
 100 items and a JSON request below 1 MB. Use each original Gmail **message ID**
@@ -444,3 +453,13 @@ when the preview contains no explicit personal request. This decision does not
 rely on a retailer name, local part, or marketing subdomain. A real new request
 in the preview takes precedence; banking/security and activation actions retain
 their separate action checks. No new ingestion fields or raw headers are needed.
+
+Human interview invitations, indirect requests to confirm scheduling preferences,
+and short personal questions about forwarded material remain eligible for reply
+attention. Forwarded history cannot introduce a new request or deadline.
+Registration-guide review requests and outstanding-balance notices are Actions;
+registration opening dates are not submission deadlines. Optional free guest-pass
+expiry is promotional. Observed payment-method additions and third-party
+application additions receive conditional account-security guidance without a
+reply draft or an assertion of compromise. These rules use source facts and
+wording patterns, never private identities or sender-name exceptions.

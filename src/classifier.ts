@@ -1,4 +1,4 @@
-import { latestText, BROADCAST, RESOLVED, hasDirectRequest, publicationNotice, marketingDiscovery, FINANCIAL_RISK, cardChange, jobPitch } from "./signals.js";
+import { latestText, BROADCAST, RESOLVED, hasReplyRequest, hasCurrentReplyRequest, publicationNotice, marketingDiscovery, FINANCIAL_RISK, cardChange, accountSecurityEvent, jobPitch } from "./signals.js";
 import { extractDeadline, hasDeadlineCue } from "./deadline.js";
 import { isAutomatedAddress, safePreview } from "./privacy.js";
 import type { InboundEmail, Label } from "./types.js";
@@ -50,10 +50,10 @@ function looksLikePerson(fromName: string): boolean {
 }
 
 function isNeedsReply(email: InboundEmail, preview: string): boolean {
-  if (RESOLVED.test(preview) && !hasDirectRequest(preview)) return false;
+  if (RESOLVED.test(preview) && !hasCurrentReplyRequest(email.subject,preview)) return false;
   if (isAutomatedAddress(email.fromAddress)) return false;
   if (!looksLikePerson(email.fromName)) return false;
-  return hasDirectRequest(email.subject) || hasDirectRequest(preview);
+  return hasReplyRequest(email.subject,preview);
 }
 
 function isRecruiterJob(email: InboundEmail, text: string): boolean {
@@ -123,14 +123,14 @@ export function classifyLabel(email: InboundEmail, receivedAt: Date, ownAddresse
   const text = `${email.subject} ${preview}`;
   const broadcast=isNewsletter(email,text) || BROADCAST.test(text) || publicationNotice(text) || marketingDiscovery(email.subject,preview);
   const self=ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase());
-  const resolved=RESOLVED.test(preview) && !hasDirectRequest(preview);
+  const resolved=RESOLVED.test(preview) && !hasCurrentReplyRequest(email.subject,preview);
   const social=matchesAny(domainOf(email.fromAddress),["linkedin.com","facebookmail.com","instagram.com","twitter.com","x.com"]);
   const deadline = !broadcast && !social && !self && !resolved && hasDeadlineCue(text) ? extractDeadline(text, receivedAt) : null;
   if (broadcast && !FINANCIAL_RISK.test(text)) return {label:isNewsletter(email,text) || /newsletter|digest|puzzle|crossword/i.test(text) ? "Newsletters" : "Spam/Promotions",deadline:null};
   if (self) return {label:"Notifications/GitHub",deadline:null};
   if (FINANCIAL_RISK.test(text)) return {label:/security alert|unrecognized|unauthorized|account (?:locked|suspended)|password (?:was )?changed|third.party app was added|recovery (?:email|phone).{0,20}changed|verify your identity/i.test(text) ? "Notifications/GitHub" : "Financial Aid",deadline};
 
-  if (cardChange(email.subject) || cardChange(preview)) return {label:"Notifications/GitHub",deadline:null};
+  if (cardChange(email.subject) || cardChange(preview) || accountSecurityEvent(email.subject) || accountSecurityEvent(preview)) return {label:"Notifications/GitHub",deadline:null};
   if (jobPitch(text)) return {label:"Recruiter/Job",deadline:null};
   if (isNeedsReply(email, preview)) return { label: "Needs Reply", deadline };
   if (isRecruiterJob(email, text)) return { label: "Recruiter/Job", deadline };
