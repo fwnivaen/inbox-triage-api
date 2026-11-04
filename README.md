@@ -400,6 +400,13 @@ warnings and concrete support requests remain visible as Actions. An approval
 without a new request does not require a reply. Configured inbox identities
 suppress incoming self-mail from personal reply routing.
 
+Completed payment/credit/debit-card additions to the recipient's account or
+wallet follow the same conditional Actions handling as linked/unlinked cards:
+normal priority, an official-app/site security-review suggestion if the recipient
+did not make the change, and no reply draft or asserted fraud. Marketing calls to
+add a card, possible/future additions, hypothetical footers and cart/catalog
+additions do not establish an observed account change.
+
 Acceptance refinements distinguish subscriber editions/introductory trial expiry
 from actual requests and deadlines. A question mark in a subject alone is not a
 reply request; explicit requests still work with single-name senders such as a
