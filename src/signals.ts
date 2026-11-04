@@ -46,12 +46,15 @@ export const marketingDiscovery=(subject:string,preview:string):boolean=>
  && !hasDirectRequest(preview);
 
 /** Material card changes merit conditional review, not a reply or fraud assertion. */
-export function cardChange(text:string):'linked'|'unlinked'|null {
+export function cardChange(text:string):'linked'|'unlinked'|'added'|null {
  // A hypothetical "if a card was linked" footer is not an observed change.
  // Keep the subject and actual notice, but stop before conditional advice.
- const observed=text.split(/\bif (?:you|your|a|an|the|this)\b/i)[0];
+ const observed=text.split(/\bif (?:you|your|a|an|any|the|this)\b/i)[0];
  const event=observed.match(/\bcard\b[^.!?\n]{0,60}?\b(unlinked|linked)\b/i);
- return event ? event[1].toLowerCase() as 'linked'|'unlinked' : null;
+ if(event) return event[1].toLowerCase() as 'linked'|'unlinked';
+ // A completed payment-card addition to the recipient's account/wallet is
+ // an account event. Offers, future additions and cart/catalog items are not.
+ return /\b(?:payment|credit|debit) card (?:was|has been) added to your (?:account|wallet)\b/i.test(observed) ? 'added' : null;
 }
 export const jobPitch=(text:string):boolean=>/\b(?:campus ambassador|ambassador program|job|role|hiring|opportunity)\b/i.test(text)
  && /\bdo you (?:love|enjoy)\b[^?]*\?/i.test(text)
