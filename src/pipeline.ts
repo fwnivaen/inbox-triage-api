@@ -1,4 +1,4 @@
-import { latestText, RESOLVED, hasDirectRequest, routineOtp, cardChange } from "./signals.js";
+import { latestText, RESOLVED, hasCurrentReplyRequest, routineOtp, cardChange, accountSecurityEvent } from "./signals.js";
 import { attentionMetadata, currentAttention } from "./attention.js";
 import { classifyLabel } from "./classifier.js";
 import { buildDigest } from "./digest.js";
@@ -20,19 +20,21 @@ export async function classifyEmail(email: InboundEmail, env?: Env, now = new Da
   const { summary, suggested_reply, summarySource } = await summarizeAndReply(env, email, label, preview);
 
   const change=cardChange(email.subject) ?? cardChange(preview);
+  const securityEvent=accountSecurityEvent(email.subject) ?? accountSecurityEvent(preview);
+  const securitySummary=securityEvent ? `${securityEvent==='payment-method' ? 'A payment method was added to your account' : 'A third-party application was added to your account'}; if you did not make this change, review account security using the official app or website.` : null;
   const self=ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase());
   return currentAttention({
     id: email.id,
     label,
     ...attentionMetadata(text,receivedAt),
-    ...(change ? {actionRequired:true} : {}),
-    attentionSuppressed: self || (!change && (routineOtp(text) || (RESOLVED.test(preview) && !hasDirectRequest(preview)))),
+    ...(change || securityEvent ? {actionRequired:true} : {}),
+    attentionSuppressed: self || (!change && !securityEvent && (routineOtp(text) || (RESOLVED.test(preview) && !hasCurrentReplyRequest(email.subject,preview)))),
     basePriority: computePriority(label,null,text,now),
     priority,
-    summary: change ? `A payment card was ${change}; if you did not make this change, review account security using the official app or website.` : summary,
-    summarySource: change ? "fallback" : summarySource,
+    summary: change ? `A payment card was ${change}; if you did not make this change, review account security using the official app or website.` : securitySummary ?? summary,
+    summarySource: change || securityEvent ? "fallback" : summarySource,
     deadline,
-    suggested_reply: change ? null : suggested_reply,
+    suggested_reply: change || securityEvent ? null : suggested_reply,
     has_attachment: email.hasAttachment,
   },email.receivedAt,now);
 }

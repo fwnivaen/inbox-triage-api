@@ -1,5 +1,5 @@
 export { IngestionStore } from "./ingestion.js";
-import { ingest, excludeMessages, repairMessages } from "./ingestion.js";
+import { ingest, excludeMessages, repairMessages, inspectMessages } from "./ingestion.js";
 import { isInboundEmail, MAX_BATCH, readJson } from "./validation.js";
 import { isAuthorized } from "./auth.js";
 import { buildDigest } from "./digest.js";
@@ -18,6 +18,10 @@ function json(data: unknown, status = 200): Response {
 }
 
 async function handle(request: Request, env: Env, url: URL): Promise<Response> {
+  if (url.pathname === "/ingest/inspect" && request.method === "POST") {
+    if (!isAuthorized(request, env)) return json({error:"Unauthorized"},401);
+    return inspectMessages(await readJson(request),env);
+  }
   if (url.pathname === "/ingest/repair" && request.method === "POST") {
     if (!isAuthorized(request, env)) return json({error:"Unauthorized"},401);
     return repairMessages(await readJson(request),env);

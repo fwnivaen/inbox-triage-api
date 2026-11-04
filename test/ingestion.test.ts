@@ -1,6 +1,6 @@
 import { expect,it,vi } from 'vitest';
 import worker from '../src/index.js';
-import { ingest,IngestionStore,excludeMessages,repairMessages } from '../src/ingestion.js';
+import { ingest,IngestionStore,excludeMessages,repairMessages,inspectMessages } from '../src/ingestion.js';
 import { fakeKv } from './fakeKv.js';
 const email={id:'message-1',account:'work',fromAddress:'sam@example.com',fromName:'Sam Example',subject:'Please reply',body:'Can you confirm a meeting today?',receivedAt:new Date().toISOString(),hasAttachment:false};
 function setup(){
@@ -62,4 +62,53 @@ it('repairs existing derived facts atomically without reingestion, coverage adva
  expect((await repairMessages({emails:[{...email,receivedAt:'2020-01-01T00:00:00Z'}]},env)).status).toBe(409);
  await excludeMessages({messages:[{account:'work',id:email.id}]},env);
  const excluded=await (await repairMessages({emails:[email]},env)).json() as any;expect(excluded.text).toBe('');
+});
+
+it('inspects exact account/message facts without mail text, storage writes or coverage changes',async()=>{
+ const {env,data}=setup();
+ await ingest({emails:[email],accounts:{work:{status:'ok',count:1}}},env);
+ const before=JSON.stringify([...data]);
+ const request=new Request('https://example.com/ingest/inspect',{method:'POST',headers:{Authorization:'Bearer test','Content-Type':'application/json'},body:JSON.stringify({messages:[{account:'work',id:email.id},{account:'personal',id:email.id},{account:'work',id:email.id}]})});
+ const response=await worker.fetch(request,env);
+ expect(response.status).toBe(200);expect(response.headers.get('Cache-Control')).toBe('no-store');
+ const result=await response.json() as any;
+ expect(result.messages).toHaveLength(2);
+ expect(result.messages[0]).toMatchObject({account:'work',id:email.id,found:true,excluded:false,receivedAt:email.receivedAt,withinWindow:true,selection:'included',label:'Needs Reply'});
+ expect(result.messages[1]).toMatchObject({account:'personal',id:email.id,found:false,selection:'missing'});
+ expect(JSON.stringify(result)).not.toMatch(/"summary":|suggested_reply|sam@example|Can you confirm/);
+ expect(JSON.stringify([...data])).toBe(before);
+ expect((await worker.fetch(new Request('https://example.com/ingest/inspect',{method:'POST'}),env)).status).toBe(401);
+ for(const messages of [[],Array(101).fill({account:'work',id:'x'}),[{account:'other',id:'x'}],[{account:'work',id:'bad id'}]]) expect((await inspectMessages({messages},env)).status).toBe(400);
+ await excludeMessages({messages:[{account:'work',id:email.id}]},env);
+ const excluded=await (await inspectMessages({messages:[{account:'work',id:email.id}]},env)).json() as any;
+ expect(excluded.messages[0].selection).toBe('excluded');
+});
+
+it('keeps first-write replay stable and repairs omission facts without changing identity, receipts or coverage',async()=>{
+ const {env,data}=setup();
+ const cases=[
+  {...email,id:'fabricated-interview',subject:'Interview invitation',body:'We would like to invite you to a group interview.',label:'Recruiter/Job'},
+  {...email,id:'fabricated-forward',subject:'Fwd: Statement',body:'What about this amount?',label:'Spam/Promotions'},
+  {...email,id:'fabricated-hours',subject:'Office hours',body:'I would like to confirm what hours you prefer.',label:'School'},
+  {...email,id:'fabricated-registration',subject:'Registration guide',body:'Please read the registration guide. Registration opens November 18, 2026.',label:'School'},
+  {...email,id:'fabricated-pass',subject:'Your free 5 day guest pass expires in 5 days',body:'An optional club offer.',label:'Deadline'},
+ ];
+ const accounts={work:{status:'ok',count:5,checkedAt:'2026-11-04T12:00:00Z'},personal:{status:'partial',count:2,checkedAt:'2026-11-04T11:00:00Z'}};
+ data.set('coverage',accounts);data.set('latest',{source:'connected-app',accounts,generatedAt:'2026-11-04T12:00:00Z'});
+ for(const c of cases) data.set(`message:work:${c.id}`,{receivedAt:c.receivedAt,email:{id:c.id,account:'work',label:c.label,priority:'low',basePriority:'low',route:'Review',actionRequired:false,summary:'A saved informational update.',deadline:null,suggested_reply:null,has_attachment:false}});
+ const original=JSON.stringify(cases.map(c=>data.get(`message:work:${c.id}`)));
+ const replay=await (await ingest({emails:cases,accounts:{work:{status:'partial',count:5}}},env)).json() as any;
+ expect(replay.inserted).toBe(0);expect(replay.duplicates).toBe(5);
+ expect(JSON.stringify(cases.map(c=>data.get(`message:work:${c.id}`)))).toBe(original);
+ const latestBefore=data.get('latest') as any;
+ const repaired=await (await repairMessages({emails:cases},env)).json() as any;
+ expect(repaired.repaired).toBe(5);expect(repaired.accounts).toEqual(latestBefore.accounts);expect(repaired.generatedAt).toBe(latestBefore.generatedAt);
+ expect((repaired.text.match(/\[Needs Reply\]/g)||[])).toHaveLength(6); // route and label on three lines
+ expect(repaired.text).toContain('[Actions]');expect(repaired.text).not.toContain('guest pass');
+ const inspected=await (await inspectMessages({messages:cases.map(c=>({account:'work',id:c.id}))},env)).json() as any;
+ expect(inspected.messages.map((m:any)=>m.receivedAt)).toEqual(cases.map(c=>c.receivedAt));
+ expect(inspected.messages.filter((m:any)=>m.selection==='included')).toHaveLength(4);
+ const beforeRejected=JSON.stringify([...data]);
+ expect((await repairMessages({emails:[{...cases[0],body:'Please upload the form.'},{...cases[1],id:'unknown-fabricated'}]},env)).status).toBe(409);
+ expect(JSON.stringify([...data])).toBe(beforeRejected);
 });
