@@ -21,6 +21,11 @@ export interface InboundEmail {
   body: string;
   receivedAt: string; // ISO 8601
   hasAttachment: boolean;
+  /** Metadata supplied by the intake owner; original headers/reply text stay transient. */
+  listUnsubscribe?: boolean;
+  threadId?: string;
+  /** A verified outgoing reply, never a claim extracted from incoming prose. */
+  sentReply?: { id: string; threadId: string; sentAt: string; labels: string[] };
 }
 
 /** Per-email output shape (SPEC.md §3). Never includes a full email address. */

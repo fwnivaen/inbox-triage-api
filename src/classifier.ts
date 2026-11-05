@@ -1,4 +1,4 @@
-import { latestText, BROADCAST, RESOLVED, hasReplyRequest, hasCurrentReplyRequest, publicationNotice, marketingDiscovery, FINANCIAL_RISK, cardChange, accountSecurityEvent, jobPitch } from "./signals.js";
+import { latestText, BROADCAST, RESOLVED, hasReplyRequest, hasCurrentReplyRequest, publicationNotice, listPublication, courseAction, marketingDiscovery, FINANCIAL_RISK, cardChange, accountSecurityEvent, jobPitch } from "./signals.js";
 import { extractDeadline, hasDeadlineCue } from "./deadline.js";
 import { isAutomatedAddress, safePreview } from "./privacy.js";
 import type { InboundEmail, Label } from "./types.js";
@@ -121,12 +121,13 @@ export interface ClassificationResult {
 export function classifyLabel(email: InboundEmail, receivedAt: Date, ownAddresses: string[] = []): ClassificationResult {
   const preview = safePreview(latestText(email.body));
   const text = `${email.subject} ${preview}`;
-  const broadcast=isNewsletter(email,text) || BROADCAST.test(text) || publicationNotice(text) || marketingDiscovery(email.subject,preview);
+  const newsletter=isNewsletter(email,text) || listPublication(email,preview);
+  const broadcast=newsletter || BROADCAST.test(text) || publicationNotice(text) || marketingDiscovery(email.subject,preview);
   const self=ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase());
   const resolved=RESOLVED.test(preview) && !hasCurrentReplyRequest(email.subject,preview);
   const social=matchesAny(domainOf(email.fromAddress),["linkedin.com","facebookmail.com","instagram.com","twitter.com","x.com"]);
   const deadline = !broadcast && !social && !self && !resolved && hasDeadlineCue(text) ? extractDeadline(text, receivedAt) : null;
-  if (broadcast && !FINANCIAL_RISK.test(text)) return {label:isNewsletter(email,text) || /newsletter|digest|puzzle|crossword/i.test(text) ? "Newsletters" : "Spam/Promotions",deadline:null};
+  if (broadcast && !FINANCIAL_RISK.test(text)) return {label:newsletter || /newsletter|digest|puzzle|crossword/i.test(text) ? "Newsletters" : "Spam/Promotions",deadline:null};
   if (self) return {label:"Notifications/GitHub",deadline:null};
   if (FINANCIAL_RISK.test(text)) return {label:/security alert|unrecognized|unauthorized|account (?:locked|suspended)|password (?:was )?changed|third.party app was added|recovery (?:email|phone).{0,20}changed|verify your identity/i.test(text) ? "Notifications/GitHub" : "Financial Aid",deadline};
 
@@ -134,6 +135,7 @@ export function classifyLabel(email: InboundEmail, receivedAt: Date, ownAddresse
   if (jobPitch(text)) return {label:"Recruiter/Job",deadline:null};
   if (isNeedsReply(email, preview)) return { label: "Needs Reply", deadline };
   if (isRecruiterJob(email, text)) return { label: "Recruiter/Job", deadline };
+  if (courseAction(text)) return { label: "School", deadline };
   if (isSchool(email, text)) return { label: "School", deadline };
   if (isFinancialAid(email, text)) return { label: "Financial Aid", deadline };
   if (isReceipt(email, text)) return { label: "Receipts", deadline };

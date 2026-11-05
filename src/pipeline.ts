@@ -1,4 +1,4 @@
-import { latestText, RESOLVED, hasCurrentReplyRequest, routineOtp, cardChange, accountSecurityEvent } from "./signals.js";
+import { latestText, RESOLVED, hasCurrentReplyRequest, hasSentReply, courseAction, routineOtp, cardChange, accountSecurityEvent } from "./signals.js";
 import { attentionMetadata, currentAttention } from "./attention.js";
 import { classifyLabel } from "./classifier.js";
 import { buildDigest } from "./digest.js";
@@ -21,14 +21,15 @@ export async function classifyEmail(email: InboundEmail, env?: Env, now = new Da
 
   const change=cardChange(email.subject) ?? cardChange(preview);
   const securityEvent=accountSecurityEvent(email.subject) ?? accountSecurityEvent(preview);
-  const securitySummary=securityEvent ? `${securityEvent==='payment-method' ? 'A payment method was added to your account' : 'A third-party application was added to your account'}; if you did not make this change, review account security using the official app or website.` : null;
+  const securitySummary=securityEvent ? `${securityEvent==='sign-in-access' ? 'An account can now sign in to your account' : securityEvent==='payment-method' ? 'A payment method was added to your account' : 'A third-party application was added to your account'}; if you did not make this change, review account security using the official app or website.` : null;
   const self=ownAddresses.some(address=>address.toLowerCase()===email.fromAddress.trim().toLowerCase());
   return currentAttention({
     id: email.id,
     label,
     ...attentionMetadata(text,receivedAt),
-    ...(change || securityEvent ? {actionRequired:true} : {}),
-    attentionSuppressed: self || (!change && !securityEvent && (routineOtp(text) || (RESOLVED.test(preview) && !hasCurrentReplyRequest(email.subject,preview)))),
+    // New course obligations require source metadata, not a legacy summary guess.
+    ...(change || securityEvent || courseAction(text) ? {actionRequired:true} : {}),
+    attentionSuppressed: self || (!change && !securityEvent && ((label==='Needs Reply' && hasSentReply(email,now)) || routineOtp(text) || (RESOLVED.test(preview) && !hasCurrentReplyRequest(email.subject,preview)))),
     basePriority: computePriority(label,null,text,now),
     priority,
     summary: change ? `A payment card was ${change}; if you did not make this change, review account security using the official app or website.` : securitySummary ?? summary,
