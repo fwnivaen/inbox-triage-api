@@ -11,6 +11,7 @@ interface GmailHeader {
 
 interface GmailMessageMetadata {
   id: string;
+  threadId?: string;
   snippet?: string;
   internalDate?: string;
   payload?: { headers?: GmailHeader[] };
@@ -76,6 +77,7 @@ export async function getMessageAsInboundEmail(
   const params = new URLSearchParams({ format: "metadata" });
   params.append("metadataHeaders", "From");
   params.append("metadataHeaders", "Subject");
+  params.append("metadataHeaders", "List-Unsubscribe");
   const message = (await gmailGet(accessToken, `/messages/${messageId}?${params.toString()}`)) as GmailMessageMetadata;
 
   const { name, address } = parseFromHeader(header(message.payload?.headers, "From"));
@@ -90,6 +92,8 @@ export async function getMessageAsInboundEmail(
     body: message.snippet ?? "",
     receivedAt,
     hasAttachment: false,
+    listUnsubscribe: Boolean(header(message.payload?.headers, "List-Unsubscribe")),
+    ...(message.threadId ? { threadId: message.threadId } : {}),
     account,
   };
 }

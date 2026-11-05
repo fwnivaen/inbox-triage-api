@@ -112,3 +112,50 @@ it('keeps first-write replay stable and repairs omission facts without changing 
  expect((await repairMessages({emails:[{...cases[0],body:'Please upload the form.'},{...cases[1],id:'unknown-fabricated'}]},env)).status).toBe(409);
  expect(JSON.stringify([...data])).toBe(beforeRejected);
 });
+
+it('repairs bounded course and context facts without retaining evidence, changing coverage or overriding exclusions',async()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-05T14:30:00Z'));
+ try {
+  const {env,data}=setup();
+  const receivedAt='2026-11-04T18:00:00Z';
+  const common={...email,account:'school',fromAddress:'no-reply@portal.example.edu',fromName:'Course Portal',receivedAt};
+  const cases=[
+   {...common,id:'synthetic-quiz-repair',subject:'Course quiz on Thursday',body:'The quiz will take place this Thursday.'},
+   {...common,id:'synthetic-training-repair',fromAddress:'no-reply@learning.example.com',subject:'Enrollment reminder',body:'You are enrolled in the laboratory safety training but have not yet completed the module.'},
+   {...common,id:'synthetic-publication-repair',fromAddress:'alex@publication.example.com',fromName:'Alex Example',subject:'You can design it, but can you grow it?',body:'Ideas for reaching customers.',listUnsubscribe:true},
+   {...common,id:'synthetic-answered-repair',fromAddress:'riley@example.edu',fromName:'Riley Example',subject:'Desk schedule',body:'Could you share your preferred hours?',threadId:'synthetic-reply-thread',sentReply:{id:'synthetic-sent-reply',threadId:'synthetic-reply-thread',sentAt:'2026-11-04T21:00:00Z',labels:['SENT']}},
+   {...common,id:'synthetic-excluded-repair',subject:'Student account',body:'Your account has an outstanding balance.'},
+  ];
+  const coverage={school:{status:'ok',count:5,checkedAt:'2026-11-05T13:00:00Z'}};
+  data.set('coverage',coverage);
+  data.set('latest',{source:'connected-app',accounts:coverage,generatedAt:'2026-11-05T13:00:00Z'});
+  for(const c of cases) data.set(`message:school:${c.id}`,{receivedAt,email:{id:c.id,account:'school',label:'Needs Reply',route:'Needs Reply',actionRequired:false,priority:'normal',basePriority:'normal',summary:'An old classification.',deadline:null,suggested_reply:null,has_attachment:false}});
+  data.set('excluded:school:synthetic-excluded-repair',true);
+  const response=await repairMessages({emails:cases},env);
+  expect(response.status).toBe(200);
+  const result=await response.json() as any;
+  expect(result.repaired).toBe(5);expect(result.accounts).toEqual(coverage);expect(result.generatedAt).toBe('2026-11-05T13:00:00Z');
+  expect((result.text.match(/\[Actions\]/g)||[])).toHaveLength(2);
+  expect(result.text).not.toMatch(/\[Needs Reply\]|grow it|preferred hours|outstanding balance/i);
+  expect(data.get('excluded:school:synthetic-excluded-repair')).toBe(true);
+  const entries=[...data].filter(([key])=>key.startsWith('message:')).map(([,entry])=>entry as any);
+  expect(entries).toHaveLength(5);expect(entries.every(entry=>entry.receivedAt===receivedAt)).toBe(true);
+  expect(JSON.stringify(entries)).not.toMatch(/sentReply|threadId|synthetic-sent-reply|listUnsubscribe|example\.edu|example\.com/);
+  const recordsAfterRepair=JSON.stringify([...data].filter(([key])=>key.startsWith('message:')));
+  vi.advanceTimersByTime(1000);
+  const replay=await (await repairMessages({emails:cases},env)).json() as any;
+  expect(replay.repaired).toBe(5);expect(replay.accounts).toEqual(coverage);expect(replay.generatedAt).toBe(result.generatedAt);
+  expect(replay.repairedAt).not.toBe(result.repairedAt);
+  expect(JSON.stringify([...data].filter(([key])=>key.startsWith('message:')))).toBe(recordsAfterRepair);
+  // An ordinary duplicate intake cannot undo an explicit repair, even if it
+  // lacks publication/reply context. Coverage changes here are unit-test only.
+  const ordinary=await (await ingest({emails:cases.map(entry=>({...entry,sentReply:undefined,listUnsubscribe:undefined,body:'Could you send your preferred hours?'})),accounts:{school:{status:'ok',count:5}}},env)).json() as any;
+  expect(ordinary.inserted).toBe(0);expect(ordinary.duplicates).toBe(5);
+  expect(JSON.stringify([...data].filter(([key])=>key.startsWith('message:')))).toBe(recordsAfterRepair);
+  const inspection=await (await inspectMessages({messages:cases.map(c=>({account:'school',id:c.id}))},env)).json() as any;
+  expect(inspection.messages.map((m:any)=>m.selection)).toEqual(['included','included','review','review','excluded']);
+  vi.setSystemTime(new Date('2026-11-05T18:00:01Z'));
+  const latest=await (await env.INGESTION.get(env.INGESTION.idFromName('consolidated')).fetch('https://internal/latest')).json() as any;
+  expect(latest.text).toBe('');expect(latest.accounts).toEqual(ordinary.accounts);
+ } finally {vi.useRealTimers();}
+});

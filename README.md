@@ -307,6 +307,26 @@ by deadline or meeting. Needs Reply, Meetings Today and Deadlines are tagged;
 meetings are detected from explicit `today` language, not a calendar integration.
 Suggested replies are drafts only; no email mutation occurs.
 
+Intake can also pass `listUnsubscribe: true` when the actual List-Unsubscribe
+header is present. This disambiguates a subject-only rhetorical reply cue when
+the bounded teaser omits its publication footer; a fresh personal request in the
+preview or a concrete course obligation still takes precedence. Ordinary service
+notices do not become newsletters from this header alone. The optional native
+Gmail metadata reader preserves the boolean and `threadId` too.
+
+An answered reply task needs separate verified outgoing evidence. When the
+intake owner has checked a reply in the **same account and thread** and confirmed
+it answers this request, it can pass the incoming `threadId` and
+`sentReply: {"id":"synthetic-sent-id","threadId":"synthetic-thread-id","sentAt":"2026-11-04T21:00:00Z","labels":["SENT"]}`.
+The reply must have a different message ID, the same thread ID, the SENT label,
+and a timestamp later than the request and no later than evaluation time.
+Earlier, future, draft or unrelated evidence cannot close the task. A later
+incoming request reopens it. Incoming prose claiming a reply is insufficient.
+Without this context the classifier continues to flag an explicit unanswered
+request. The Worker does not search sent mail itself, and a SENT item is never
+ingested as received mail for this check. Only the resulting suppression flag
+is stored; the evidence and original headers remain transient.
+
 `GET /digest/latest` prefers the strongly consistent connected-app digest over
 the optional native Gmail cron's KV result. The native cron therefore cannot
 overwrite connected-app results. This repo does not install an assistant
@@ -344,6 +364,14 @@ may remain actionable. Concrete Actions include incomplete applications, missing
 documents, failed payments and account-security steps. Routine school updates,
 job ads and other Review items are not attention items. Newsletters/promotions
 are suppressed even when their text contains a promotional deadline.
+
+Upcoming quiz/exam announcements and explicit personal enrollment with incomplete
+training also count as Actions. Practice material, results, canceled/past exams,
+completed training and general course notices remain Review. These rules do not
+turn publication dates, a weekday or “next week” into a due date. Newly enabled
+account sign-in access receives conditional official-site security review; it
+does not establish unauthorized access. An expired scheduling cue does not
+establish whether the underlying request was answered or resolved.
 
 Only safe booleans/date facts and baseline priority are added to stored metadata;
 original text remains transient. Legacy metadata is conservatively interpreted

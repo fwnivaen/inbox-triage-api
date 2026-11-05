@@ -1,10 +1,20 @@
 import type { InboundEmail } from './types.js';
 export const MAX_BATCH = 100;
+const validId=(value:unknown):value is string=>typeof value==='string' && /^[a-zA-Z0-9:_-]{1,200}$/.test(value);
+const validDate=(value:unknown):value is string=>typeof value==='string' && value.length<=40 && Number.isFinite(Date.parse(value));
 export function isInboundEmail(value: unknown): value is InboundEmail {
  if(!value || typeof value!=='object') return false;
  const v=value as Record<string,unknown>;
  const limits:Record<string,number>={id:200,fromAddress:320,fromName:200,subject:1000,body:10000,receivedAt:40};
  for(const [field,max] of Object.entries(limits)) if(typeof v[field]!=='string' || (v[field] as string).length>max) return false;
+ if(v.listUnsubscribe!==undefined && typeof v.listUnsubscribe!=='boolean') return false;
+ if(v.threadId!==undefined && !validId(v.threadId)) return false;
+ if(v.sentReply!==undefined) {
+  if(!v.sentReply || typeof v.sentReply!=='object' || Array.isArray(v.sentReply)) return false;
+  const reply=v.sentReply as Record<string,unknown>;
+  if(!validId(reply.id)||!validId(reply.threadId)||!validDate(reply.sentAt)||!Array.isArray(reply.labels)
+   ||reply.labels.length>40||reply.labels.some(label=>typeof label!=='string'||label.length>100)) return false;
+ }
  return /^[a-zA-Z0-9:_-]{1,200}$/.test(v.id as string) && Number.isFinite(Date.parse(v.receivedAt as string)) && Date.parse(v.receivedAt as string) <= Date.now()+300000 && typeof v.hasAttachment==='boolean';
 }
 export async function readJson(request:Request):Promise<unknown> {

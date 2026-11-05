@@ -1,3 +1,5 @@
+import type { InboundEmail } from './types.js';
+
 /** Latest message only: quoted history must not introduce requests or dates. */
 export function latestText(body:string):string {
  const decoded=body.replace(/&(#(?:x[0-9a-f]+|[0-9]+)|apos|quot|amp|lt|gt|nbsp|rsquo|lsquo);/gi,(entity,name:string)=>{
@@ -43,6 +45,34 @@ export function hasCurrentReplyRequest(subject:string,preview:string):boolean {
 }
 /** Browser chrome is a publication signal only when no personal request remains. */
 export const publicationNotice=(text:string):boolean=>/\bview (?:this email )?in (?:your )?browser\b/i.test(text) && !hasDirectRequest(text);
+/** A publication header disambiguates a subject-only request when a bounded
+ * teaser omits its footer. It does not relabel ordinary service/list notices. */
+export const listPublication=(email:InboundEmail,preview:string):boolean=>email.listUnsubscribe===true
+ && hasDirectRequest(email.subject) && !hasCurrentReplyRequest(email.subject,preview) && !courseAction(`${email.subject} ${preview}`)
+ && !cardChange(email.subject) && !cardChange(preview) && !accountSecurityEvent(email.subject) && !accountSecurityEvent(preview);
+
+/** Future assessments and personally incomplete enrollment are actionable even
+ * without an imperative. No calendar date is inferred from announcement dates. */
+export function courseAction(text:string):boolean {
+ if(BROADCAST.test(text)) return false;
+ const assessment=text.split(/[.!?\n]/).some(sentence=>
+  /\b(?:quiz|exam(?:ination)?|midterm)\b/i.test(sentence)
+  && /\b(?:quiz|exam(?:ination)?|midterm)\b[^.!?\n]{0,100}\b(?:(?:this|next) (?:week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|tomorrow|will take place|will be held|is scheduled)\b/i.test(sentence)
+  && !/\b(?:practice|sample|past|completed|cancelled|canceled|results?|grades?|scores?|was|were|took place)\b|\b(?:quiz|exam|midterm) review\b|\bno (?:quiz|exam|midterm)\b/i.test(sentence));
+ const training=/\b(?:training|course|module)\b/i.test(text)
+  && /\b(?:you are enrolled|you're enrolled|your (?:required |mandatory )?(?:training|course|module))\b/i.test(text)
+  && /\b(?:not (?:yet )?completed?|incomplete|outstanding)\b/i.test(text);
+ return assessment || training;
+}
+
+/** Only a later verified SENT item in this exact thread closes a reply task.
+ * A later incoming request must reopen it; prose such as "I replied" is not proof. */
+export function hasSentReply(email:InboundEmail,now:Date):boolean {
+ const reply=email.sentReply;
+ return Boolean(reply && email.threadId && reply.threadId===email.threadId && reply.id!==email.id
+  && reply.labels.includes('SENT') && !reply.labels.includes('DRAFT') && Date.parse(reply.sentAt)>Date.parse(email.receivedAt)
+  && Date.parse(reply.sentAt)<=now.getTime());
+}
 export function routineOtp(text:string):boolean {
  return /\b(sign.in code|verification code|authentication code|one.time (?:authentication )?(?:code|password)|finish signing in)\b/i.test(text)
   && !/\b(security alert|new sign.in|unrecognized (?:device|sign.in)|account (?:locked|suspended)|password (?:was )?changed|third.party app was added|recovery (?:email|phone).{0,20}changed|negative balance|overdrawn|insufficient funds)\b/i.test(text);
@@ -71,10 +101,11 @@ export function cardChange(text:string):'linked'|'unlinked'|'added'|null {
 }
 /** Observed recipient-account events merit conditional review, not an assertion
  * of compromise. Suggestions and hypothetical footer language are insufficient. */
-export function accountSecurityEvent(text:string):'payment-method'|'application'|null {
+export function accountSecurityEvent(text:string):'payment-method'|'application'|'sign-in-access'|null {
  const observed=text.split(/\bif (?:you|your|a|an|any|the|this)\b/i)[0];
  if(/\bpayment method (?:was|has been) added to your (?:account|wallet)\b/i.test(observed)) return 'payment-method';
  if(/\bthird.party (?:[a-z0-9'-]+\s+){0,5}(?:app|application) (?:was|has been) added to your account\b/i.test(observed)) return 'application';
+ if(/\baccount(?:\s+\[redacted-email\])? can now sign in to your\b/i.test(observed)) return 'sign-in-access';
  return null;
 }
 export const jobPitch=(text:string):boolean=>/\b(?:campus ambassador|ambassador program|job|role|hiring|opportunity)\b/i.test(text)
