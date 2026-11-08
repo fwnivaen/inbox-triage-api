@@ -1,5 +1,7 @@
 # Smart Inbox Triage API
 
+A project by [Nivaen Giritharan](https://github.com/fwnivaen).
+
 Classifies incoming email into one of nine labels + a priority tier, drafts
 a short summary (and, where useful, a reply you can review before sending),
 and assembles a daily digest. Built in TypeScript on **Cloudflare Workers**,
